@@ -58,7 +58,13 @@ export const storeSnapshot = mutation({
     tokens: v.array(tokenValidator),
   },
   handler: async (ctx, args) => {
-    // Delete existing tokens for this date (upsert behavior)
+    // Safety check: only allow overwriting today's data
+    const today = new Date().toISOString().split("T")[0];
+    if (args.date !== today) {
+      throw new Error(`Cannot overwrite historical data for ${args.date}. Only today (${today}) can be updated.`);
+    }
+
+    // Delete existing tokens for today (upsert behavior for same-day refreshes)
     const existing = await ctx.db
       .query("graduatedTokens")
       .withIndex("by_date", (q) => q.eq("snapshotDate", args.date))
