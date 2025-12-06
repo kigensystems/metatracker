@@ -27,8 +27,9 @@ A dashboard to track graduated Solana tokens from a Dune Analytics query, enrich
 │                  React Frontend                      │
 │  • Table view with sortable columns                 │
 │  • Direct links to DexScreener                      │
-│  • Social links (website, twitter, telegram)        │
-│  • Live/Historical toggle                           │
+│  • Social links (website, X)                        │
+│  • Date pill selector (Today + last 14 days)        │
+│  • Next sync countdown in header                    │
 │  • Token creation time (PST)                        │
 └─────────────────────────────────────────────────────┘
 ```
@@ -59,7 +60,7 @@ A dashboard to track graduated Solana tokens from a Dune Analytics query, enrich
 - Token name and image
 - Market cap
 - Website URL
-- Social links (Twitter, Telegram)
+- X (Twitter) link
 - `pairCreatedAt` - Token deployment timestamp
 
 ---
@@ -114,10 +115,10 @@ meta-tracker/
     ├── index.css                 # Tailwind + pixel art theme
     │
     ├── components/
-    │   ├── Header.tsx            # Pixel font logo, stats, Dune freshness indicator
-    │   ├── DatePicker.tsx        # Live/Historical toggle + date selector
+    │   ├── Header.tsx            # Logo, date, token count, next sync countdown, refresh
+    │   ├── DatePicker.tsx        # Horizontal date pill selector (14 day limit)
     │   ├── TokenList.tsx         # Table with header row, sortable by market cap
-    │   ├── TokenRow.tsx          # Individual token row with social links + created time
+    │   ├── TokenRow.tsx          # Token row with website/X links + created time
     │   ├── LoadingScreen.tsx     # Skeleton loading
     │   └── EmptyState.tsx        # Error and empty states
     │
@@ -129,22 +130,34 @@ meta-tracker/
 
 ## UI Features
 
+### Header
+- Pixel font logo (META.TRACKER)
+- Current date display (Today/Yesterday/Dec 4)
+- Token count
+- Last updated timestamp
+- Next sync countdown (time until 00:00 or 12:00 UTC)
+- Manual refresh button
+
 ### Token Table
 - **Columns**: #, Image, Token (name/symbol/created time), Market Cap, Links
 - **Sorting**: Click Market Cap header to toggle asc/desc
 - **Row click**: Opens DexScreener in new tab
-- **Social links**: Website (globe), Twitter, Telegram icons (when available)
+- **Social links**: Website (globe) and X icons (when available)
 - **Created time**: Shows pair creation time in PST timezone
 
-### Historical Mode
-- Toggle between Live and Historical view
-- Date picker shows available snapshot dates
-- Browse past token data stored in Convex
+### Date Picker
+- Horizontal pill-based selector
+- "Today" always first (green when active)
+- Historical dates as pills (purple when selected)
+- Limited to last 14 days
+- Shows token count on each pill
+- Filters out empty snapshots
 
 ### Styling
 - Pixel art aesthetic with "Press Start 2P" font for branding
 - Dark neutral background (#0a0a0c)
-- Neon green (#39ff14) for positive values and accents
+- Neon green (#39ff14) for live/today data
+- Neon purple (#aa55ff) for historical data
 - Gold/amber (#ffd700) for token symbols
 - Pixelated logo rendering
 
@@ -307,37 +320,50 @@ Token data linked to daily snapshots.
 
 ---
 
-## Recent Changes (Dec 2024)
+## Recent Changes
 
-### Rebrand to meta.tracker
+### Dec 6, 2024 - UI Overhaul & Production Deploy
+
+**Header Simplification**
+- Removed cluttered stats (Tracking X/X, Dune data freshness, source badges)
+- Now shows: date, token count, last updated, next sync countdown, refresh button
+- Added real-time countdown to next scheduled sync (00:00 or 12:00 UTC)
+
+**DatePicker Redesign**
+- Replaced confusing Live/Historical toggle with horizontal date pills
+- "Today" fetches live data, past dates fetch historical snapshots
+- Limited to 14 most recent days
+- Filters out empty snapshots (tokenCount = 0)
+- Color-coded: green for today, purple for historical
+
+**Social Links**
+- Updated Twitter icon to X logo (official SVG)
+- Removed Telegram links entirely (only website + X now)
+
+**Bug Fixes**
+- Fixed `createdAt` not persisting: added missing field to Convex `tokenValidator`
+- Added `createdAt` field to `scheduled-sync.ts` enrichment
+
+**Code Cleanup**
+- Removed unused state variables (`duneExecutionEndedAt`, `dataSource`)
+- Removed unused Header props
+- Added `scrollbar-hide` utility class
+
+**Deployment**
+- Initialized git repo
+- Pushed to github.com/kigensystems/metatracker
+- Deployed to Netlify
+
+---
+
+### Dec 5, 2024 - Rebrand & Initial Features
 - Renamed from "pump.tracker" to "meta.tracker"
 - Added pixel art logo (`public/logo.png`)
-- Updated favicon and apple-touch-icon
-- Package name changed to `meta-tracker`
-
-### UI/Styling Updates
 - Added "Press Start 2P" pixel font for branding
-- Dark neutral background (removed blue/purple tint)
-- Removed grid background pattern
-- Neon green (#39ff14) and gold (#ffd700) accent colors
-- Pixelated logo rendering with `image-rendering: pixelated`
-
-### Error Handling Improvements
-- Added enrichment tracking to `graduated.ts` and `scheduled-sync.ts`
-- API responses now include `enrichment.failedCount` and `enrichment.successRate`
-- Graceful degradation when DexScreener fails for some tokens
-- Logging for failed enrichments in scheduled sync
-
-### New Features
-- **Token creation time**: Added `createdAt` field from DexScreener's `pairCreatedAt`
-- Displays in PST timezone on token rows (e.g., "Dec 5, 2:30 PM")
-- **Force refresh**: Refresh button now passes `force=true` to bypass cache
-
-### Code Cleanup
-- Removed unused `recharts` dependency
-- Removed empty `src/hooks/` directory
-- Added `@deprecated` JSDoc comments to legacy schema fields
-- Cleaned up unused imports (Zap icon, framer-motion in some components)
+- Dark neutral background (#0a0a0c)
+- Added `createdAt` field from DexScreener's `pairCreatedAt`
+- Added enrichment tracking with success rate logging
+- Force refresh button bypasses cache
 
 ---
 
