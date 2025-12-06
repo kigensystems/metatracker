@@ -1,0 +1,174 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;500;600;700&display=swap');
+
+@theme {
+  --font-pixel: 'Press Start 2P', monospace;
+  --font-sans: 'Inter', system-ui, sans-serif;
+
+  /* Dark background palette */
+  --color-void: #0a0a0c;
+  --color-abyss: #111114;
+  --color-slate: #18181b;
+  --color-steel: #27272a;
+  --color-muted: #4a5568;
+  --color-ghost: #a0aec0;
+
+  /* Colors that complement the logo */
+  --color-neon-green: #39ff14;
+  --color-neon-amber: #ffd700;
+  --color-neon-red: #ff3366;
+  --color-neon-blue: #00aaff;
+  --color-neon-purple: #aa55ff;
+
+  --color-safe: #39ff14;
+  --color-caution: #ffd700;
+  --color-danger: #ff3366;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-steel) var(--color-abyss);
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--color-abyss);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--color-steel);
+  border-radius: 3px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted);
+}
+
+html {
+  background: var(--color-void);
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-void);
+  color: #e8e8f0;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Pixel font for branding */
+.font-pixel {
+  font-family: var(--font-pixel);
+}
+
+/* Pixel-perfect image rendering for logo */
+.image-pixelated {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* Grid background pattern */
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(42, 42, 56, 0.3) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(42, 42, 56, 0.3) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-position: -1px -1px;
+}
+
+/* Glow effects */
+.glow-safe {
+  box-shadow: 0 0 20px rgba(57, 255, 20, 0.15), inset 0 0 20px rgba(57, 255, 20, 0.05);
+}
+
+.glow-caution {
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.15), inset 0 0 20px rgba(255, 215, 0, 0.05);
+}
+
+.glow-danger {
+  box-shadow: 0 0 20px rgba(255, 51, 102, 0.15), inset 0 0 20px rgba(255, 51, 102, 0.05);
+}
+
+/* Text glow */
+.text-glow-green {
+  text-shadow: 0 0 10px rgba(57, 255, 20, 0.5);
+}
+
+.text-glow-amber {
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+.text-glow-danger {
+  text-shadow: 0 0 10px rgba(255, 51, 102, 0.5);
+}
+
+/* Card hover effect */
+.card-hover {
+  transition: all 0.2s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  background: var(--color-slate);
+}
+
+/* Mono numbers */
+.mono {
+  font-family: 'SF Mono', 'Consolas', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Status indicator */
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-indicator.safe {
+  background: var(--color-safe);
+  box-shadow: 0 0 8px var(--color-safe);
+}
+
+.status-indicator.caution {
+  background: var(--color-caution);
+  box-shadow: 0 0 8px var(--color-caution);
+}
+
+.status-indicator.danger {
+  background: var(--color-danger);
+  box-shadow: 0 0 8px var(--color-danger);
+}
+
+/* Loading skeleton */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-slate) 25%,
+    var(--color-steel) 50%,
+    var(--color-slate) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Hide scrollbar but keep functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
