@@ -354,6 +354,16 @@ Token data linked to daily snapshots.
 - Pushed to github.com/kigensystems/metatracker
 - Deployed to Netlify
 
+**Data Recovery**
+- Accidentally wiped Dec 5 data during testing
+- Created custom Dune query (ID: 6308633) with 48-24 hour time window
+- Restored 155 tokens for Dec 5 with full DexScreener enrichment
+
+**Historical Data Protection**
+- Added safeguard in `storeSnapshot` mutation to prevent overwriting past dates
+- Only today's date can be updated; historical dates throw an error
+- Protects against accidental data loss from manual commands
+
 ---
 
 ### Dec 5, 2024 - Rebrand & Initial Features
