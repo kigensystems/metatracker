@@ -71,7 +71,7 @@ A dashboard to track graduated Solana tokens from a Dune Analytics query, enrich
 1. Fetch Dune metadata (`?limit=0`) - nearly free API call
 2. Compare `execution_ended_at` with cached value
 3. If same → serve from Convex (instant)
-4. If different → full fetch, enrich, store in Convex
+4. If different → full fetch from Dune, enrich, return (no storage)
 
 ### Cache Hit Flow
 ```
@@ -79,8 +79,10 @@ Frontend → Netlify Function → Check Dune metadata
                                     ↓
                             Same as cached?
                             ├─ YES → Serve from Convex (instant)
-                            └─ NO  → Fetch from Dune, enrich, store, return
+                            └─ NO  → Fetch from Dune, enrich, return
 ```
+
+**Note**: Only the scheduled sync (00:00/12:00 UTC) stores snapshots in Convex. Manual refreshes update cache metadata but don't create snapshots. This prevents duplicate/overlapping data from timezone edge cases.
 
 ---
 
@@ -123,7 +125,8 @@ meta-tracker/
     │   └── EmptyState.tsx        # Error and empty states
     │
     └── lib/
-        └── types.ts              # TypeScript interfaces
+        ├── types.ts              # TypeScript interfaces
+        └── theme.ts              # MUI theme configuration
 ```
 
 ---
@@ -181,6 +184,7 @@ meta-tracker/
   "fetchedAt": "2025-12-05T...",
   "duneExecutionEndedAt": "2025-12-05T...",
   "source": "live" | "cache" | "historical",
+  "snapshotDate": "2025-12-05",  // Server's UTC date (for live/cache modes)
   "enrichment": {
     "failedCount": 2,
     "successRate": 98.5
@@ -321,6 +325,42 @@ Token data linked to daily snapshots.
 ---
 
 ## Recent Changes
+
+### Dec 7, 2024 - MUI Integration & Snapshot Reliability
+
+**MUI Component Library**
+- Added Material-UI (`@mui/material`, `@emotion/react`, `@emotion/styled`, `@mui/icons-material`)
+- Created custom MUI theme (`src/lib/theme.ts`) matching existing neon/pixel art design
+- Header now uses MUI: AppBar, Toolbar, Chip, Tooltip, IconButton, LinearProgress
+- DatePicker now uses MUI Chips with icons
+- Tooltips on header elements for better UX
+
+**DatePicker Simplification**
+- Removed "Yesterday" button (was causing timezone confusion)
+- Now shows: "Today" + dated pills (Dec 6, Dec 5, etc.)
+- Dates sorted newest-first by date field (not Convex creation time)
+
+**Timezone Fix**
+- Server now returns `snapshotDate` in live/cache API responses
+- Frontend uses server's date to filter historical dates (not client calculation)
+- Prevents duplicate pills when client/server UTC dates differ
+- Example: User in PST after 4pm would see wrong dates without this fix
+
+**Snapshot Storage Hardening**
+- **Only scheduled sync creates snapshots** (00:00 and 12:00 UTC)
+- Manual refreshes no longer store data in Convex (only update cache metadata)
+- Prevents duplicate/overlapping snapshots from timezone edge cases
+- Each day guaranteed to have exactly one snapshot
+
+**Data Cleanup**
+- Added `deleteByDate` mutation to `dailySnapshots.ts`
+- Allows removing stale/duplicate snapshots and their tokens
+- Used to clean up duplicate Dec 7 data during debugging
+
+**File Structure Updates**
+- Added `src/lib/theme.ts` - MUI theme configuration
+
+---
 
 ### Dec 6, 2024 - UI Overhaul & Production Deploy
 
