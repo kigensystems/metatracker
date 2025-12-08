@@ -1,4 +1,6 @@
 import { motion } from 'framer-motion';
+import { Box, Chip, Stack } from '@mui/material';
+import TodayIcon from '@mui/icons-material/Today';
 
 interface AvailableDate {
   date: string;
@@ -7,11 +9,11 @@ interface AvailableDate {
 }
 
 interface DatePickerProps {
-  selectedDate: string | null; // null = live/today
+  selectedDate: string | null;
   availableDates: AvailableDate[];
   onDateChange: (date: string | null) => void;
   isLoading?: boolean;
-  liveDataDate?: string | null; // Server's "today" date to filter from historical
+  liveDataDate?: string | null;
 }
 
 function formatDate(dateStr: string): string {
@@ -31,17 +33,13 @@ export function DatePicker({
   liveDataDate,
 }: DatePickerProps) {
   const isToday = selectedDate === null;
-
-  // Use server's date if available, otherwise fall back to client calculation
   const today = liveDataDate || new Date().toISOString().split('T')[0];
 
-  // Sort all past dates by date descending, exclude today (today = live data)
   const historicalDates = availableDates
     .filter(d => d.tokenCount > 0 && d.date !== today)
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 14);
 
-  // Get today's token count from available dates
   const todayData = availableDates.find(d => d.date === today);
   const todayCount = todayData?.tokenCount;
 
@@ -50,52 +48,122 @@ export function DatePicker({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.1 }}
-      className="mb-6"
     >
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
-        {/* Today - always shown first */}
-        <button
+      <Box
+        sx={{
+          display: 'flex',
+          gap: 1,
+          overflowX: 'auto',
+          pb: 1,
+          mb: 2,
+          '&::-webkit-scrollbar': { display: 'none' },
+          scrollbarWidth: 'none',
+        }}
+      >
+        {/* Today chip */}
+        <Chip
+          icon={<TodayIcon sx={{ fontSize: 16 }} />}
+          label={
+            <Stack direction="row" spacing={0.75} alignItems="center">
+              <span>Today</span>
+              {todayCount !== undefined && (
+                <Box
+                  component="span"
+                  sx={{
+                    fontSize: '0.75rem',
+                    opacity: isToday ? 0.8 : 0.5,
+                    fontFamily: 'monospace',
+                  }}
+                >
+                  {todayCount}
+                </Box>
+              )}
+            </Stack>
+          }
           onClick={() => onDateChange(null)}
           disabled={isLoading}
-          className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
-            isToday
-              ? 'bg-neon-green/20 text-neon-green border border-neon-green/40'
-              : 'bg-slate/50 text-ghost border border-steel/30 hover:bg-slate hover:text-white'
-          } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-        >
-          <span>Today</span>
-          {todayCount !== undefined && (
-            <span className={`ml-1.5 text-xs ${isToday ? 'text-neon-green/70' : 'text-ghost/50'}`}>
-              {todayCount}
-            </span>
-          )}
-        </button>
+          variant={isToday ? 'filled' : 'outlined'}
+          sx={{
+            flexShrink: 0,
+            height: 36,
+            borderRadius: '18px',
+            fontWeight: 500,
+            transition: 'all 0.2s ease',
+            ...(isToday
+              ? {
+                  backgroundColor: 'rgba(57, 255, 20, 0.15)',
+                  color: 'primary.main',
+                  border: '1px solid',
+                  borderColor: 'rgba(57, 255, 20, 0.4)',
+                  '& .MuiChip-icon': { color: 'primary.main' },
+                }
+              : {
+                  borderColor: 'divider',
+                  color: 'text.secondary',
+                  '&:hover': {
+                    backgroundColor: 'action.hover',
+                    color: 'text.primary',
+                  },
+                }),
+          }}
+        />
 
-        {/* Historical dates */}
+        {/* Historical date chips */}
         {historicalDates.map(({ date, tokenCount }, index) => {
           const isSelected = selectedDate === date;
           return (
-            <motion.button
+            <motion.div
               key={date}
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: index * 0.03 }}
-              onClick={() => onDateChange(date)}
-              disabled={isLoading}
-              className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
-                isSelected
-                  ? 'bg-neon-purple/20 text-neon-purple border border-neon-purple/40'
-                  : 'bg-slate/50 text-ghost border border-steel/30 hover:bg-slate hover:text-white'
-              } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              <span>{formatDate(date)}</span>
-              <span className={`ml-1.5 text-xs ${isSelected ? 'text-neon-purple/70' : 'text-ghost/50'}`}>
-                {tokenCount}
-              </span>
-            </motion.button>
+              <Chip
+                label={
+                  <Stack direction="row" spacing={0.75} alignItems="center">
+                    <span>{formatDate(date)}</span>
+                    <Box
+                      component="span"
+                      sx={{
+                        fontSize: '0.75rem',
+                        opacity: isSelected ? 0.8 : 0.5,
+                        fontFamily: 'monospace',
+                      }}
+                    >
+                      {tokenCount}
+                    </Box>
+                  </Stack>
+                }
+                onClick={() => onDateChange(date)}
+                disabled={isLoading}
+                variant={isSelected ? 'filled' : 'outlined'}
+                sx={{
+                  flexShrink: 0,
+                  height: 36,
+                  borderRadius: '18px',
+                  fontWeight: 500,
+                  transition: 'all 0.2s ease',
+                  ...(isSelected
+                    ? {
+                        backgroundColor: 'rgba(170, 85, 255, 0.15)',
+                        color: 'secondary.main',
+                        border: '1px solid',
+                        borderColor: 'rgba(170, 85, 255, 0.4)',
+                      }
+                    : {
+                        borderColor: 'divider',
+                        color: 'text.secondary',
+                        '&:hover': {
+                          backgroundColor: 'action.hover',
+                          color: 'text.primary',
+                        },
+                      }),
+                }}
+              />
+            </motion.div>
           );
         })}
-      </div>
+      </Box>
     </motion.div>
   );
 }

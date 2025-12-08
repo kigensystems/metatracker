@@ -1,13 +1,25 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { RefreshCw } from 'lucide-react';
+import {
+  AppBar,
+  Toolbar,
+  IconButton,
+  Tooltip,
+  Chip,
+  Box,
+  Typography,
+  LinearProgress,
+} from '@mui/material';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import SyncIcon from '@mui/icons-material/Sync';
 
 interface HeaderProps {
   tokenCount: number;
   lastUpdated: Date | null;
   onRefresh: () => void;
   loading: boolean;
-  selectedDate: string | null; // null = today/live
+  selectedDate: string | null;
 }
 
 export function Header({
@@ -19,19 +31,17 @@ export function Header({
 }: HeaderProps) {
   const [timeUntilSync, setTimeUntilSync] = useState('');
 
-  // Calculate time until next sync (00:00 or 12:00 UTC)
   useEffect(() => {
     const calculateTimeUntilSync = () => {
       const now = new Date();
       const utcHours = now.getUTCHours();
       const utcMinutes = now.getUTCMinutes();
 
-      // Next sync is either 00:00 or 12:00 UTC
       let hoursUntil: number;
       if (utcHours < 12) {
-        hoursUntil = 12 - utcHours - (utcMinutes > 0 ? 1 : 0);
+        hoursUntil = 11 - utcHours + (utcMinutes > 0 ? 0 : 1);
       } else {
-        hoursUntil = 24 - utcHours + (utcMinutes > 0 ? -1 : 0);
+        hoursUntil = 23 - utcHours + (utcMinutes > 0 ? 0 : 1);
       }
       const minutesUntil = utcMinutes > 0 ? 60 - utcMinutes : 0;
 
@@ -47,7 +57,7 @@ export function Header({
     setTimeUntilSync(calculateTimeUntilSync());
     const interval = setInterval(() => {
       setTimeUntilSync(calculateTimeUntilSync());
-    }, 60000); // Update every minute
+    }, 60000);
 
     return () => clearInterval(interval);
   }, []);
@@ -66,12 +76,6 @@ export function Header({
 
   const formatDisplayDate = (dateStr: string | null): string => {
     if (!dateStr) return 'Today';
-    const today = new Date().toISOString().split('T')[0];
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-
-    if (dateStr === today) return 'Today';
-    if (dateStr === yesterday) return 'Yesterday';
-
     const date = new Date(dateStr + 'T00:00:00Z');
     return date.toLocaleDateString('en-US', {
       month: 'short',
@@ -80,87 +84,156 @@ export function Header({
     });
   };
 
+  const isLive = !selectedDate;
+
   return (
-    <header className="sticky top-0 z-50 bg-abyss/90 backdrop-blur-xl border-b border-steel/30">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-14 sm:h-16">
-          {/* Logo */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="flex items-center gap-2.5"
-          >
+    <AppBar position="sticky" elevation={0}>
+      <Toolbar sx={{ justifyContent: 'space-between', minHeight: { xs: 56, sm: 64 } }}>
+        {/* Logo */}
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <img
               src="/logo.png"
               alt="meta.tracker"
-              className="w-8 h-8 sm:w-9 sm:h-9 object-contain image-pixelated"
+              style={{ width: 36, height: 36, imageRendering: 'pixelated' }}
             />
-            <h1 className="font-pixel text-[10px] sm:text-xs tracking-wide">
-              <span className="text-white">META</span>
-              <span className="text-neon-green text-glow-green">.TRACKER</span>
-            </h1>
-          </motion.div>
+            <Typography
+              component="h1"
+              sx={{
+                fontFamily: "'Press Start 2P', monospace",
+                fontSize: { xs: '10px', sm: '12px' },
+                letterSpacing: '0.05em',
+              }}
+            >
+              <span style={{ color: '#fff' }}>META</span>
+              <span
+                style={{
+                  color: '#39ff14',
+                  textShadow: '0 0 10px rgba(57, 255, 20, 0.5)',
+                }}
+              >
+                .TRACKER
+              </span>
+            </Typography>
+          </Box>
+        </motion.div>
 
-          {/* Right side */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="flex items-center gap-3 sm:gap-4"
-          >
-            {/* Date + Token count */}
-            <div className="text-sm flex items-center gap-2">
-              <span className={`font-medium ${selectedDate ? 'text-neon-purple' : 'text-neon-green'}`}>
-                {formatDisplayDate(selectedDate)}
-              </span>
-              <span className="text-ghost">·</span>
-              <span>
-                <span className="font-mono text-white font-semibold">{tokenCount}</span>
-                <span className="text-ghost ml-1 hidden sm:inline">tokens</span>
-              </span>
-            </div>
+        {/* Right side */}
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 } }}>
+            {/* Date + Token count chip */}
+            <Chip
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <span>{formatDisplayDate(selectedDate)}</span>
+                  <Box
+                    component="span"
+                    sx={{
+                      width: 4,
+                      height: 4,
+                      borderRadius: '50%',
+                      backgroundColor: 'text.secondary',
+                    }}
+                  />
+                  <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                    {tokenCount}
+                  </span>
+                </Box>
+              }
+              variant="outlined"
+              sx={{
+                borderColor: isLive ? 'primary.main' : 'secondary.main',
+                color: isLive ? 'primary.main' : 'secondary.main',
+                '& .MuiChip-label': { px: 1.5 },
+              }}
+            />
 
             {/* Last updated */}
             {lastUpdated && (
-              <>
-                <div className="w-px h-4 bg-steel/50 hidden sm:block" />
-                <span className="text-xs text-ghost hidden sm:block">
-                  {formatRelativeTime(lastUpdated)}
-                </span>
-              </>
+              <Tooltip title="Last updated" arrow>
+                <Chip
+                  icon={<AccessTimeIcon sx={{ fontSize: 14 }} />}
+                  label={formatRelativeTime(lastUpdated)}
+                  size="small"
+                  variant="outlined"
+                  sx={{
+                    display: { xs: 'none', sm: 'flex' },
+                    borderColor: 'divider',
+                    color: 'text.secondary',
+                    '& .MuiChip-icon': { color: 'text.secondary' },
+                  }}
+                />
+              </Tooltip>
             )}
 
             {/* Next sync countdown */}
-            <div className="w-px h-4 bg-steel/50 hidden sm:block" />
-            <div className="text-xs text-ghost hidden sm:flex items-center gap-1.5">
-              <span>Next</span>
-              <span className="text-white font-mono">{timeUntilSync}</span>
-            </div>
-
-            {/* Refresh */}
-            <button
-              onClick={onRefresh}
-              disabled={loading}
-              className="flex items-center justify-center w-9 h-9 rounded-lg bg-slate/80 border border-steel/50 hover:border-neon-green/40 hover:bg-slate transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
-            >
-              <RefreshCw
-                className={`w-4 h-4 text-ghost group-hover:text-neon-green transition-colors ${
-                  loading ? 'animate-spin' : ''
-                }`}
+            <Tooltip title="Next scheduled sync (00:00 or 12:00 UTC)" arrow>
+              <Chip
+                icon={<SyncIcon sx={{ fontSize: 14 }} />}
+                label={timeUntilSync}
+                size="small"
+                variant="outlined"
+                sx={{
+                  display: { xs: 'none', sm: 'flex' },
+                  borderColor: 'divider',
+                  color: 'text.secondary',
+                  '& .MuiChip-icon': { color: 'text.secondary' },
+                  '& .MuiChip-label': { fontFamily: 'monospace' },
+                }}
               />
-            </button>
-          </motion.div>
-        </div>
-      </div>
+            </Tooltip>
+
+            {/* Refresh button */}
+            <Tooltip title="Refresh data" arrow>
+              <span>
+                <IconButton
+                  onClick={onRefresh}
+                  disabled={loading}
+                  size="small"
+                  sx={{
+                    border: 1,
+                    borderColor: 'divider',
+                    '&:hover': {
+                      borderColor: 'primary.main',
+                      '& .MuiSvgIcon-root': { color: 'primary.main' },
+                    },
+                  }}
+                >
+                  <RefreshIcon
+                    sx={{
+                      fontSize: 18,
+                      color: 'text.secondary',
+                      animation: loading ? 'spin 1s linear infinite' : 'none',
+                      '@keyframes spin': {
+                        from: { transform: 'rotate(0deg)' },
+                        to: { transform: 'rotate(360deg)' },
+                      },
+                    }}
+                  />
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Box>
+        </motion.div>
+      </Toolbar>
 
       {/* Loading bar */}
       {loading && (
-        <motion.div
-          initial={{ scaleX: 0 }}
-          animate={{ scaleX: 1 }}
-          transition={{ duration: 2, ease: 'easeInOut' }}
-          className="h-0.5 bg-gradient-to-r from-neon-green via-neon-blue to-neon-purple origin-left"
+        <LinearProgress
+          sx={{
+            height: 2,
+            '& .MuiLinearProgress-bar': {
+              background: 'linear-gradient(90deg, #39ff14, #00aaff, #aa55ff)',
+            },
+          }}
         />
       )}
-    </header>
+    </AppBar>
   );
 }
