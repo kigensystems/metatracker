@@ -375,20 +375,13 @@ export default async function handler(request: Request, _context: Context) {
       console.log(`DexScreener enrichment: ${failedEnrichments.length} tokens failed (${enrichmentRate.toFixed(1)}% success)`);
     }
 
-    // Store in Convex (fire and forget, don't block response)
-    Promise.all([
-      convex.mutation(api.graduatedTokens.storeSnapshot, {
-        date: today,
-        executionEndedAt,
-        tokens: enrichedTokens.map(serializeForConvex),
-      }),
-      convex.mutation(api.duneMetadata.update, {
-        queryId: QUERY_ID,
-        lastExecutionEndedAt: executionEndedAt,
-        lastFetchedAt: Date.now(),
-        totalRowCount: duneTokens.length,
-      }),
-    ]).catch(err => console.error('Failed to store in Convex:', err));
+    // Only update cache metadata (snapshots are created by scheduled-sync only)
+    convex.mutation(api.duneMetadata.update, {
+      queryId: QUERY_ID,
+      lastExecutionEndedAt: executionEndedAt,
+      lastFetchedAt: Date.now(),
+      totalRowCount: duneTokens.length,
+    }).catch(err => console.error('Failed to update metadata:', err));
 
     return new Response(
       JSON.stringify({
