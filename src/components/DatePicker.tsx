@@ -1,6 +1,4 @@
-import { motion } from 'framer-motion';
-import { Box, Chip, Stack } from '@mui/material';
-import TodayIcon from '@mui/icons-material/Today';
+import { Box, Button, ButtonGroup, Typography } from '@mui/material';
 
 interface AvailableDate {
   date: string;
@@ -38,132 +36,112 @@ export function DatePicker({
   const historicalDates = availableDates
     .filter(d => d.tokenCount > 0 && d.date !== today)
     .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 14);
+    .slice(0, 7);
 
   const todayData = availableDates.find(d => d.date === today);
   const todayCount = todayData?.tokenCount;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.1 }}
-    >
-      <Box
+    <Box sx={{ mb: 3 }}>
+      <ButtonGroup
+        variant="outlined"
+        size="small"
         sx={{
-          display: 'flex',
-          gap: 1,
-          overflowX: 'auto',
-          pb: 1,
-          mb: 2,
-          '&::-webkit-scrollbar': { display: 'none' },
-          scrollbarWidth: 'none',
+          '& .MuiButtonGroup-grouped': {
+            borderColor: 'divider',
+            '&:hover': {
+              borderColor: 'divider',
+              backgroundColor: 'action.hover',
+            },
+          },
         }}
       >
-        {/* Today chip */}
-        <Chip
-          icon={<TodayIcon sx={{ fontSize: 16 }} />}
-          label={
-            <Stack direction="row" spacing={0.75} alignItems="center">
-              <span>Today</span>
-              {todayCount !== undefined && (
-                <Box
-                  component="span"
-                  sx={{
-                    fontSize: '0.75rem',
-                    opacity: isToday ? 0.8 : 0.5,
-                    fontFamily: 'monospace',
-                  }}
-                >
-                  {todayCount}
-                </Box>
-              )}
-            </Stack>
-          }
+        {/* Today tab */}
+        <Button
           onClick={() => onDateChange(null)}
           disabled={isLoading}
-          variant={isToday ? 'filled' : 'outlined'}
           sx={{
-            flexShrink: 0,
-            height: 36,
-            borderRadius: '18px',
+            px: 2,
+            py: 0.75,
+            textTransform: 'none',
             fontWeight: 500,
-            transition: 'all 0.2s ease',
+            fontSize: '0.8125rem',
             ...(isToday
               ? {
-                  backgroundColor: 'rgba(57, 255, 20, 0.15)',
+                  backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                  borderColor: 'primary.main',
                   color: 'primary.main',
-                  border: '1px solid',
-                  borderColor: 'rgba(57, 255, 20, 0.4)',
-                  '& .MuiChip-icon': { color: 'primary.main' },
+                  '&:hover': {
+                    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+                    borderColor: 'primary.main',
+                  },
                 }
               : {
-                  borderColor: 'divider',
                   color: 'text.secondary',
-                  '&:hover': {
-                    backgroundColor: 'action.hover',
-                    color: 'text.primary',
-                  },
                 }),
           }}
-        />
+        >
+          Today
+          {todayCount !== undefined && (
+            <Typography
+              component="span"
+              sx={{
+                ml: 0.75,
+                fontSize: '0.75rem',
+                fontFamily: 'monospace',
+                opacity: 0.7,
+              }}
+            >
+              {todayCount}
+            </Typography>
+          )}
+        </Button>
 
-        {/* Historical date chips */}
-        {historicalDates.map(({ date, tokenCount }, index) => {
+        {/* Historical date tabs */}
+        {historicalDates.map(({ date, tokenCount }) => {
           const isSelected = selectedDate === date;
           return (
-            <motion.div
+            <Button
               key={date}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: index * 0.03 }}
+              onClick={() => onDateChange(date)}
+              disabled={isLoading}
+              sx={{
+                px: 2,
+                py: 0.75,
+                textTransform: 'none',
+                fontWeight: 500,
+                fontSize: '0.8125rem',
+                ...(isSelected
+                  ? {
+                      backgroundColor: 'rgba(167, 139, 250, 0.1)',
+                      borderColor: 'secondary.main',
+                      color: 'secondary.main',
+                      '&:hover': {
+                        backgroundColor: 'rgba(167, 139, 250, 0.15)',
+                        borderColor: 'secondary.main',
+                      },
+                    }
+                  : {
+                      color: 'text.secondary',
+                    }),
+              }}
             >
-              <Chip
-                label={
-                  <Stack direction="row" spacing={0.75} alignItems="center">
-                    <span>{formatDate(date)}</span>
-                    <Box
-                      component="span"
-                      sx={{
-                        fontSize: '0.75rem',
-                        opacity: isSelected ? 0.8 : 0.5,
-                        fontFamily: 'monospace',
-                      }}
-                    >
-                      {tokenCount}
-                    </Box>
-                  </Stack>
-                }
-                onClick={() => onDateChange(date)}
-                disabled={isLoading}
-                variant={isSelected ? 'filled' : 'outlined'}
+              {formatDate(date)}
+              <Typography
+                component="span"
                 sx={{
-                  flexShrink: 0,
-                  height: 36,
-                  borderRadius: '18px',
-                  fontWeight: 500,
-                  transition: 'all 0.2s ease',
-                  ...(isSelected
-                    ? {
-                        backgroundColor: 'rgba(170, 85, 255, 0.15)',
-                        color: 'secondary.main',
-                        border: '1px solid',
-                        borderColor: 'rgba(170, 85, 255, 0.4)',
-                      }
-                    : {
-                        borderColor: 'divider',
-                        color: 'text.secondary',
-                        '&:hover': {
-                          backgroundColor: 'action.hover',
-                          color: 'text.primary',
-                        },
-                      }),
+                  ml: 0.75,
+                  fontSize: '0.75rem',
+                  fontFamily: 'monospace',
+                  opacity: 0.7,
                 }}
-              />
-            </motion.div>
+              >
+                {tokenCount}
+              </Typography>
+            </Button>
           );
         })}
-      </Box>
-    </motion.div>
+      </ButtonGroup>
+    </Box>
   );
 }

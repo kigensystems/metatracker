@@ -1,15 +1,15 @@
-import { motion } from 'framer-motion';
-import { Globe } from 'lucide-react';
+import { useState } from 'react';
+import { Box, Typography, IconButton, Avatar } from '@mui/material';
+import LanguageIcon from '@mui/icons-material/Language';
+import type { GraduatedToken } from '../lib/types';
 
-// X (formerly Twitter) icon
-function XIcon({ className }: { className?: string }) {
+function XIcon() {
   return (
-    <svg viewBox="0 0 24 24" className={className} fill="currentColor">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
       <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
     </svg>
   );
 }
-import type { GraduatedToken } from '../lib/types';
 
 interface TokenRowProps {
   token: GraduatedToken;
@@ -24,7 +24,7 @@ function formatNumber(num: number | null | undefined): string {
 }
 
 function formatCreatedAt(timestamp: number | null | undefined): string {
-  if (!timestamp) return '-';
+  if (!timestamp) return '';
   const date = new Date(timestamp);
   return date.toLocaleString('en-US', {
     timeZone: 'America/Los_Angeles',
@@ -37,6 +37,7 @@ function formatCreatedAt(timestamp: number | null | undefined): string {
 }
 
 export function TokenRow({ token, index }: TokenRowProps) {
+  const [imgError, setImgError] = useState(false);
   const dexUrl = token.dexScreenerUrl || `https://dexscreener.com/solana/${token.mint}`;
 
   const handleLinkClick = (e: React.MouseEvent, url: string) => {
@@ -48,81 +49,143 @@ export function TokenRow({ token, index }: TokenRowProps) {
   const hasSocials = token.website || token.twitter;
 
   return (
-    <motion.a
+    <Box
+      component="a"
       href={dexUrl}
       target="_blank"
       rel="noopener noreferrer"
-      initial={{ opacity: 0, x: -10 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.02, duration: 0.2 }}
-      className="grid grid-cols-[40px_48px_1fr_100px_100px] gap-4 px-4 py-3 hover:bg-slate/30 cursor-pointer transition-colors items-center"
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: '48px 48px 1fr 110px 90px',
+        gap: 2,
+        px: 2.5,
+        py: 2,
+        alignItems: 'center',
+        textDecoration: 'none',
+        color: 'inherit',
+        borderBottom: 1,
+        borderColor: 'divider',
+        transition: 'background-color 0.15s',
+        '&:hover': {
+          backgroundColor: 'action.hover',
+        },
+        '&:last-child': {
+          borderBottom: 0,
+        },
+      }}
     >
       {/* Row Number */}
-      <div className="text-sm font-mono text-ghost">{index + 1}</div>
+      <Typography
+        variant="body2"
+        sx={{ color: 'text.secondary', fontFamily: 'monospace', fontWeight: 500 }}
+      >
+        {index + 1}
+      </Typography>
 
       {/* Token Image */}
-      <div className="w-12 h-12 flex-shrink-0">
-        {token.image ? (
-          <img
-            src={token.image}
-            alt={token.symbol}
-            className="w-12 h-12 rounded-lg object-cover border border-steel/50"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-            }}
-          />
-        ) : (
-          <div className="w-12 h-12 rounded-lg bg-slate border border-steel/50 flex items-center justify-center">
-            <span className="text-sm font-bold text-ghost">
-              {token.symbol?.slice(0, 2) || '??'}
-            </span>
-          </div>
-        )}
-      </div>
+      {token.image && !imgError ? (
+        <Avatar
+          src={token.image}
+          alt={token.symbol}
+          variant="rounded"
+          onError={() => setImgError(true)}
+          sx={{ width: 40, height: 40, border: 1, borderColor: 'divider' }}
+        />
+      ) : (
+        <Avatar
+          variant="rounded"
+          sx={{
+            width: 40,
+            height: 40,
+            bgcolor: 'action.hover',
+            border: 1,
+            borderColor: 'divider',
+            fontSize: '0.75rem',
+            fontWeight: 600,
+            color: 'text.secondary',
+          }}
+        >
+          {token.symbol?.slice(0, 2) || '??'}
+        </Avatar>
+      )}
 
       {/* Token Name/Symbol */}
-      <div className="min-w-0">
-        <p className="font-medium text-white truncate">{token.name || 'Unknown'}</p>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-neon-amber font-mono">${token.symbol}</span>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            fontWeight: 500,
+            color: 'text.primary',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {token.name || 'Unknown'}
+        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.25 }}>
+          <Typography
+            variant="caption"
+            sx={{ color: 'warning.main', fontFamily: 'monospace', fontWeight: 500 }}
+          >
+            ${token.symbol}
+          </Typography>
           {token.createdAt && (
-            <span className="text-xs text-ghost">{formatCreatedAt(token.createdAt)}</span>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              {formatCreatedAt(token.createdAt)}
+            </Typography>
           )}
-        </div>
-      </div>
+        </Box>
+      </Box>
 
       {/* Market Cap */}
-      <div className="text-right">
-        <p className="text-sm font-mono text-neon-green">{formatNumber(token.marketCap)}</p>
-      </div>
+      <Typography
+        variant="body2"
+        sx={{
+          textAlign: 'right',
+          fontFamily: 'monospace',
+          fontWeight: 600,
+          color: 'primary.main',
+        }}
+      >
+        {formatNumber(token.marketCap)}
+      </Typography>
 
       {/* Socials */}
-      <div className="flex items-center justify-end gap-2">
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
         {hasSocials ? (
           <>
             {token.website && (
-              <button
+              <IconButton
+                size="small"
                 onClick={(e) => handleLinkClick(e, token.website!)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-steel/50 transition-colors text-ghost hover:text-white"
-                title="Website"
+                sx={{
+                  color: 'text.secondary',
+                  '&:hover': { color: 'text.primary', backgroundColor: 'action.hover' },
+                }}
               >
-                <Globe className="w-4 h-4" />
-              </button>
+                <LanguageIcon sx={{ fontSize: 18 }} />
+              </IconButton>
             )}
             {token.twitter && (
-              <button
+              <IconButton
+                size="small"
                 onClick={(e) => handleLinkClick(e, token.twitter!)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-steel/50 transition-colors text-ghost hover:text-white"
-                title="X"
+                sx={{
+                  color: 'text.secondary',
+                  '&:hover': { color: 'text.primary', backgroundColor: 'action.hover' },
+                }}
               >
-                <XIcon className="w-4 h-4" />
-              </button>
+                <XIcon />
+              </IconButton>
             )}
           </>
         ) : (
-          <span className="text-xs text-ghost/50">-</span>
+          <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+            —
+          </Typography>
         )}
-      </div>
-    </motion.a>
+      </Box>
+    </Box>
   );
 }

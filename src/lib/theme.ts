@@ -1,46 +1,48 @@
 import { createTheme } from '@mui/material/styles';
 
-// Match the existing design system
+// Clean, professional color palette
 const colors = {
-  void: '#0a0a0c',
-  abyss: '#111114',
+  void: '#09090b',
+  abyss: '#0f0f12',
   slate: '#18181b',
   steel: '#27272a',
-  muted: '#4a5568',
-  ghost: '#a0aec0',
-  neonGreen: '#39ff14',
-  neonPurple: '#aa55ff',
-  neonAmber: '#ffd700',
-  neonRed: '#ff3366',
-  neonBlue: '#00aaff',
+  muted: '#52525b',
+  ghost: '#a1a1aa',
+  // Softer, more professional accent colors
+  accent: '#22c55e',      // Muted green (was neon #39ff14)
+  accentMuted: '#16a34a',
+  purple: '#a78bfa',      // Softer purple
+  amber: '#f59e0b',
+  red: '#ef4444',
+  blue: '#3b82f6',
 };
 
 export const theme = createTheme({
   palette: {
     mode: 'dark',
     primary: {
-      main: colors.neonGreen,
+      main: colors.accent,
       contrastText: colors.void,
     },
     secondary: {
-      main: colors.neonPurple,
+      main: colors.purple,
       contrastText: '#fff',
     },
     error: {
-      main: colors.neonRed,
+      main: colors.red,
     },
     warning: {
-      main: colors.neonAmber,
+      main: colors.amber,
     },
     info: {
-      main: colors.neonBlue,
+      main: colors.blue,
     },
     background: {
       default: colors.void,
       paper: colors.abyss,
     },
     text: {
-      primary: '#e8e8f0',
+      primary: '#fafafa',
       secondary: colors.ghost,
     },
     divider: colors.steel,
@@ -56,12 +58,13 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           fontWeight: 500,
-          transition: 'all 0.2s ease',
+          transition: 'all 0.15s ease',
         },
         outlined: {
           borderColor: colors.steel,
           '&:hover': {
             backgroundColor: colors.slate,
+            borderColor: colors.muted,
           },
         },
       },
@@ -69,7 +72,7 @@ export const theme = createTheme({
     MuiIconButton: {
       styleOverrides: {
         root: {
-          transition: 'all 0.2s ease',
+          transition: 'all 0.15s ease',
           '&:hover': {
             backgroundColor: colors.slate,
           },
@@ -91,8 +94,7 @@ export const theme = createTheme({
     MuiAppBar: {
       styleOverrides: {
         root: {
-          backgroundColor: `${colors.abyss}cc`,
-          backdropFilter: 'blur(12px)',
+          backgroundColor: colors.abyss,
           borderBottom: `1px solid ${colors.steel}`,
         },
       },

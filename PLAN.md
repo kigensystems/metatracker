@@ -134,9 +134,7 @@ meta-tracker/
 ## UI Features
 
 ### Header
-- Pixel font logo (META.TRACKER)
-- Current date display (Today/Yesterday/Dec 4)
-- Token count
+- Clean logo: "meta.tracker" in Inter font (lowercase)
 - Last updated timestamp
 - Next sync countdown (time until 00:00 or 12:00 UTC)
 - Manual refresh button
@@ -147,22 +145,23 @@ meta-tracker/
 - **Row click**: Opens DexScreener in new tab
 - **Social links**: Website (globe) and X icons (when available)
 - **Created time**: Shows pair creation time in PST timezone
+- **Pagination**: 50 results per page with controls top and bottom
 
 ### Date Picker
-- Horizontal pill-based selector
+- Connected ButtonGroup tab selector
 - "Today" always first (green when active)
-- Historical dates as pills (purple when selected)
-- Limited to last 14 days
-- Shows token count on each pill
+- Historical dates as tabs (purple when selected)
+- Limited to last 7 days
+- Shows token count on each tab
 - Filters out empty snapshots
 
 ### Styling
-- Pixel art aesthetic with "Press Start 2P" font for branding
-- Dark neutral background (#0a0a0c)
-- Neon green (#39ff14) for live/today data
-- Neon purple (#aa55ff) for historical data
-- Gold/amber (#ffd700) for token symbols
-- Pixelated logo rendering
+- Clean, professional dark theme
+- Dark neutral background (#09090b)
+- Muted green (#22c55e) for live/today data
+- Soft purple (#a78bfa) for historical data
+- Amber (#f59e0b) for token symbols
+- Pixel art logo only (not fonts)
 
 ---
 
@@ -326,7 +325,42 @@ Token data linked to daily snapshots.
 
 ## Recent Changes
 
-### Dec 7, 2024 - MUI Integration & Snapshot Reliability
+### Dec 7, 2024 (Session 2) - UX Cleanup & Performance
+
+**Visual Refresh**
+- Softened color palette: neon green (#39ff14) → muted green (#22c55e)
+- Softened purple: (#aa55ff) → (#a78bfa)
+- Removed pixel font from header, now uses Inter with lowercase "meta.tracker"
+- Removed redundant "Today • 79" badge from header (info now in date picker only)
+
+**Date Picker Redesign**
+- Changed from floating pill chips to connected ButtonGroup tabs
+- Cleaner, more professional appearance
+- Limited to 7 historical dates (was 14)
+
+**Loading State**
+- Replaced complex skeleton cards with minimal spinner
+- Single Loader2 icon + "Loading tokens..." text
+
+**Performance**
+- Added client-side caching: revisiting a date is now instant
+- Cache persists for session, keyed by date
+- Force refresh bypasses cache
+
+**Pagination**
+- Now shows 50 results per page (was all at once)
+- Pagination controls top and bottom
+- Row numbers reflect correct rank across pages
+- Page resets to 1 on date change
+
+**Code Quality**
+- All main components now use MUI consistently
+- Removed unused Tailwind component imports
+- CSS reduced from 17KB to 13KB
+
+---
+
+### Dec 7, 2024 (Session 1) - MUI Integration & Snapshot Reliability
 
 **MUI Component Library**
 - Added Material-UI (`@mui/material`, `@emotion/react`, `@emotion/styled`, `@mui/icons-material`)

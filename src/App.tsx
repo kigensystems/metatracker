@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Header } from './components/Header';
 import { DatePicker } from './components/DatePicker';
 import { TokenList } from './components/TokenList';
@@ -14,6 +14,13 @@ interface AvailableDate {
   capturedAt: number;
 }
 
+interface CachedData {
+  tokens: GraduatedToken[];
+  lastUpdated: Date;
+}
+
+const ITEMS_PER_PAGE = 50;
+
 function App() {
   const [tokens, setTokens] = useState<GraduatedToken[]>([]);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -22,7 +29,11 @@ function App() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [availableDates, setAvailableDates] = useState<AvailableDate[]>([]);
-  const [liveDataDate, setLiveDataDate] = useState<string | null>(null); // Server's "today"
+  const [liveDataDate, setLiveDataDate] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+
+  // Client-side cache for fetched data
+  const cache = useRef<Map<string, CachedData>>(new Map());
 
   // Fetch available dates for historical browsing
   const fetchAvailableDates = useCallback(async () => {
@@ -39,6 +50,20 @@ function App() {
 
   // Fetch tokens (supports live and historical modes)
   const fetchTokens = useCallback(async (forceRefresh = false) => {
+    const cacheKey = selectedDate || 'live';
+
+    // Check cache first (unless forcing refresh)
+    if (!forceRefresh) {
+      const cached = cache.current.get(cacheKey);
+      if (cached) {
+        setTokens(cached.tokens);
+        setLastUpdated(cached.lastUpdated);
+        setLoading(false);
+        setError(null);
+        return;
+      }
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -60,8 +85,14 @@ function App() {
         throw new Error(data.error);
       }
 
-      setTokens(data.tokens || []);
-      setLastUpdated(new Date(data.fetchedAt || data.capturedAt || Date.now()));
+      const fetchedTokens = data.tokens || [];
+      const updatedAt = new Date(data.fetchedAt || data.capturedAt || Date.now());
+
+      setTokens(fetchedTokens);
+      setLastUpdated(updatedAt);
+
+      // Store in cache
+      cache.current.set(cacheKey, { tokens: fetchedTokens, lastUpdated: updatedAt });
 
       // Capture the server's date for live data (to filter from historical)
       if (mode === 'live' && data.snapshotDate) {
@@ -93,6 +124,7 @@ function App() {
   // Handle date selection
   const handleDateChange = useCallback((date: string | null) => {
     setSelectedDate(date);
+    setPage(1); // Reset to first page on date change
   }, []);
 
   // Sort tokens by market cap
@@ -100,6 +132,13 @@ function App() {
     const comparison = (b.marketCap || 0) - (a.marketCap || 0);
     return sortOrder === 'asc' ? -comparison : comparison;
   });
+
+  // Pagination
+  const totalPages = Math.ceil(sortedTokens.length / ITEMS_PER_PAGE);
+  const paginatedTokens = sortedTokens.slice(
+    (page - 1) * ITEMS_PER_PAGE,
+    page * ITEMS_PER_PAGE
+  );
 
   return (
     <div className="min-h-screen bg-void relative">
@@ -138,9 +177,13 @@ function App() {
             />
           ) : (
             <TokenList
-              tokens={sortedTokens}
+              tokens={paginatedTokens}
+              totalCount={sortedTokens.length}
               sortOrder={sortOrder}
               onSortChange={setSortOrder}
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
             />
           )}
         </main>
