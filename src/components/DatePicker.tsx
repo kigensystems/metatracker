@@ -11,6 +11,7 @@ interface DatePickerProps {
   availableDates: AvailableDate[];
   onDateChange: (date: string | null) => void;
   isLoading?: boolean;
+  liveDataDate?: string | null; // Server's "today" date to filter from historical
 }
 
 function formatDate(dateStr: string): string {
@@ -27,9 +28,12 @@ export function DatePicker({
   availableDates,
   onDateChange,
   isLoading = false,
+  liveDataDate,
 }: DatePickerProps) {
-  const today = new Date().toISOString().split('T')[0];
   const isToday = selectedDate === null;
+
+  // Use server's date if available, otherwise fall back to client calculation
+  const today = liveDataDate || new Date().toISOString().split('T')[0];
 
   // Sort all past dates by date descending, exclude today (today = live data)
   const historicalDates = availableDates

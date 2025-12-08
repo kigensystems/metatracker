@@ -22,6 +22,7 @@ function App() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [availableDates, setAvailableDates] = useState<AvailableDate[]>([]);
+  const [liveDataDate, setLiveDataDate] = useState<string | null>(null); // Server's "today"
 
   // Fetch available dates for historical browsing
   const fetchAvailableDates = useCallback(async () => {
@@ -61,6 +62,11 @@ function App() {
 
       setTokens(data.tokens || []);
       setLastUpdated(new Date(data.fetchedAt || data.capturedAt || Date.now()));
+
+      // Capture the server's date for live data (to filter from historical)
+      if (mode === 'live' && data.snapshotDate) {
+        setLiveDataDate(data.snapshotDate);
+      }
 
       // Refresh available dates after a live fetch (new data might be stored)
       if (mode === 'live') {
@@ -113,6 +119,7 @@ function App() {
               availableDates={availableDates}
               onDateChange={handleDateChange}
               isLoading={loading}
+              liveDataDate={liveDataDate}
             />
           </div>
 

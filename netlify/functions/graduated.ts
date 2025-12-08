@@ -359,6 +359,7 @@ export default async function handler(request: Request, _context: Context) {
             fetchedAt: new Date(metadata.lastFetchedAt).toISOString(),
             duneExecutionEndedAt: metadata.lastExecutionEndedAt,
             source: 'cache',
+            snapshotDate: today, // Tell frontend what date this data is for
           }),
           { status: 200, headers }
         );
@@ -396,6 +397,7 @@ export default async function handler(request: Request, _context: Context) {
         fetchedAt: new Date().toISOString(),
         duneExecutionEndedAt: executionEndedAt,
         source: 'live',
+        snapshotDate: today, // Tell frontend what date this data is for
         enrichment: {
           failedCount: failedEnrichments.length,
           successRate: enrichmentRate,
