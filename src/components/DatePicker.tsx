@@ -13,13 +13,7 @@ interface DatePickerProps {
   isLoading?: boolean;
 }
 
-function formatRelativeDate(dateStr: string): string {
-  const today = new Date().toISOString().split('T')[0];
-  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-
-  if (dateStr === today) return 'Today';
-  if (dateStr === yesterday) return 'Yesterday';
-
+function formatDate(dateStr: string): string {
   const date = new Date(dateStr + 'T00:00:00Z');
   return date.toLocaleDateString('en-US', {
     month: 'short',
@@ -37,10 +31,11 @@ export function DatePicker({
   const today = new Date().toISOString().split('T')[0];
   const isToday = selectedDate === null;
 
-  // Get historical dates (excluding today), limit to 13 so total is 14 with Today
+  // Sort all past dates by date descending, exclude today (today = live data)
   const historicalDates = availableDates
     .filter(d => d.tokenCount > 0 && d.date !== today)
-    .slice(0, 13);
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 14);
 
   // Get today's token count from available dates
   const todayData = availableDates.find(d => d.date === today);
@@ -72,7 +67,7 @@ export function DatePicker({
           )}
         </button>
 
-        {/* Past dates */}
+        {/* Historical dates */}
         {historicalDates.map(({ date, tokenCount }, index) => {
           const isSelected = selectedDate === date;
           return (
@@ -89,7 +84,7 @@ export function DatePicker({
                   : 'bg-slate/50 text-ghost border border-steel/30 hover:bg-slate hover:text-white'
               } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              <span>{formatRelativeDate(date)}</span>
+              <span>{formatDate(date)}</span>
               <span className={`ml-1.5 text-xs ${isSelected ? 'text-neon-purple/70' : 'text-ghost/50'}`}>
                 {tokenCount}
               </span>
