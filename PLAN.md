@@ -172,6 +172,15 @@ Open questions:
 - Whether third parties used the leaked key.
 - Whether Dune enforcement was automated and false-positive.
 
+Current operating decision:
+
+- A replacement Dune API key is not currently available because the Dune account is banned.
+- Keep the existing Netlify `DUNE_API_KEY` in place while it continues to work.
+- Do not unset, overwrite, or revoke the current production key until a confirmed replacement key exists and has been tested in production.
+- Treat the key as exposed and fragile. It may stop working without warning if Dune applies API enforcement to the banned account context.
+- Focus immediate engineering work on reducing unnecessary Dune calls, blocking abuse paths, preserving stale data gracefully, and making failures visible.
+- Appeal the Dune ban rather than creating replacement accounts to bypass enforcement.
+
 ### Known Product And Backend Risks
 
 - `force=true` is public and can cause production to call Dune. This should be protected or removed.
@@ -184,14 +193,23 @@ Open questions:
 
 ### Forward Plan
 
-P0 - Credential and abuse protection:
+P0 - Credential containment and abuse protection:
 
-- Rotate the Dune API key immediately.
-- Revoke the old key after production is updated.
-- Store the new key as a secret Netlify environment variable.
-- Remove the historical key from git history if the repo is public or may be cloned by others.
+- Keep the current Netlify `DUNE_API_KEY` unchanged until a replacement key is available.
+- Do not expose the key in any repo, docs, logs, screenshots, or local example files.
 - Disable, authenticate, or rate-limit `force=true`.
 - Add server-side rate limiting for live/manual refresh.
+- Add stale-data fallback behavior so the app keeps serving the last good Convex snapshot if Dune access fails.
+- Add explicit alerts for `401`, `402`, `403`, and `429` responses from Dune.
+- Coordinate git-history cleanup if the repo is public or may be cloned by others, but do not treat history cleanup as key rotation.
+- Appeal the Dune ban and request clarification on whether the API key is expected to keep working.
+
+P0 - Credential recovery when Dune access is restored:
+
+- Create a new Dune API key under the correct account/team.
+- Store the new key as a secret Netlify environment variable.
+- Deploy and confirm production can query Dune with the new key.
+- Revoke the old exposed key only after the replacement key is confirmed working.
 
 P1 - Snapshot reliability and observability:
 
@@ -692,10 +710,13 @@ Token data linked to daily snapshots.
 
 ## Future Improvements
 
-- [ ] Rotate Dune credentials and revoke the exposed key
+- [ ] Keep current Netlify `DUNE_API_KEY` in place until a tested replacement exists
 - [ ] Protect or remove public `force=true`
 - [ ] Add durable Convex `syncRuns` observability
 - [ ] Add scheduled-sync alerting for missing snapshots
+- [ ] Appeal Dune ban and confirm whether existing API key should keep working
+- [ ] Add stale-data fallback if Dune access fails
+- [ ] Rotate Dune credentials and revoke the exposed key after account/key recovery
 - [ ] Fork or recreate the Dune query under a controlled account/team
 - [ ] Fix live metadata/cache mismatch
 - [ ] Batch live DexScreener enrichment
