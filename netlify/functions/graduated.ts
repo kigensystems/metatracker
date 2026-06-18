@@ -261,15 +261,15 @@ export default async function handler(request: Request, _context: Context) {
     const duneApiKey = process.env.DUNE_API_KEY;
     const convexUrl = process.env.CONVEX_URL;
 
-    if (!duneApiKey) {
-      return new Response(
-        JSON.stringify({ error: 'DUNE_API_KEY not configured' }),
-        { status: 500, headers }
-      );
-    }
-
     // If Convex is not configured, fall back to direct Dune fetch
     if (!convexUrl) {
+      if (!duneApiKey) {
+        return new Response(
+          JSON.stringify({ error: 'DUNE_API_KEY not configured' }),
+          { status: 500, headers }
+        );
+      }
+
       console.log('CONVEX_URL not configured, fetching directly from Dune');
       const { tokens, executionEndedAt } = await fetchDuneData(duneApiKey);
       const { tokens: enrichedTokens, failedEnrichments, enrichmentRate } = await enrichTokens(tokens);
@@ -294,6 +294,13 @@ export default async function handler(request: Request, _context: Context) {
 
     // Mode: check-freshness - just return metadata
     if (mode === 'check-freshness') {
+      if (!duneApiKey) {
+        return new Response(
+          JSON.stringify({ error: 'DUNE_API_KEY not configured' }),
+          { status: 500, headers }
+        );
+      }
+
       const [metadata, duneStatus] = await Promise.all([
         convex.query(api.duneMetadata.get, { queryId: QUERY_ID }),
         fetchDuneStatus(duneApiKey),
@@ -339,49 +346,101 @@ export default async function handler(request: Request, _context: Context) {
 
     // Mode: live (default) - smart cache check
     const today = getTodayUTC();
-    const forceRefresh = url.searchParams.get('force') === 'true';
+    const forceRequested = url.searchParams.get('force') === 'true';
+    const adminRefreshToken = process.env.ADMIN_REFRESH_TOKEN;
+    const forceAuthorized = forceRequested
+      && Boolean(adminRefreshToken)
+      && request.headers.get('x-admin-refresh-token') === adminRefreshToken;
 
-    const metadata = await convex.query(api.duneMetadata.get, { queryId: QUERY_ID });
-    const duneStatus = await fetchDuneStatus(duneApiKey);
+    if (forceRequested && !forceAuthorized) {
+      return new Response(
+        JSON.stringify({ error: 'force refresh requires admin authorization' }),
+        { status: 403, headers }
+      );
+    }
 
-    const isStale = forceRefresh || metadata?.lastExecutionEndedAt !== duneStatus.executionEndedAt;
+    const [metadata, cached, snapshot] = await Promise.all([
+      convex.query(api.duneMetadata.get, { queryId: QUERY_ID }),
+      convex.query(api.graduatedTokens.byDate, { date: today }),
+      convex.query(api.dailySnapshots.byDate, { date: today }),
+    ]);
 
-    // If cache is fresh, serve from Convex
-    if (!isStale && metadata) {
-      const cached = await convex.query(api.graduatedTokens.byDate, { date: today });
-
+    if (!duneApiKey) {
       if (cached.length > 0) {
-        console.log('Serving from cache');
+        console.log('DUNE_API_KEY not configured, serving cached snapshot');
         return new Response(
           JSON.stringify({
             tokens: cached.map(deserializeFromConvex),
             totalCount: cached.length,
-            fetchedAt: new Date(metadata.lastFetchedAt).toISOString(),
-            duneExecutionEndedAt: metadata.lastExecutionEndedAt,
-            source: 'cache',
-            snapshotDate: today, // Tell frontend what date this data is for
+            fetchedAt: new Date(snapshot?.capturedAt || metadata?.lastFetchedAt || Date.now()).toISOString(),
+            duneExecutionEndedAt: snapshot?.executionEndedAt || metadata?.lastExecutionEndedAt || null,
+            source: 'cache-stale',
+            snapshotDate: today,
+            isStale: true,
+            staleReason: 'DUNE_API_KEY not configured',
           }),
           { status: 200, headers }
         );
       }
+
+      return new Response(
+        JSON.stringify({ error: 'DUNE_API_KEY not configured and no cached snapshot available' }),
+        { status: 500, headers }
+      );
     }
 
-    // Cache miss or stale - fetch fresh data
-    console.log('Cache miss, fetching from Dune');
+    let duneStatus: { executionEndedAt: string; state: string };
+    try {
+      duneStatus = await fetchDuneStatus(duneApiKey);
+    } catch (error) {
+      if (cached.length > 0) {
+        console.log('Dune freshness check failed, serving cached snapshot');
+        return new Response(
+          JSON.stringify({
+            tokens: cached.map(deserializeFromConvex),
+            totalCount: cached.length,
+            fetchedAt: new Date(snapshot?.capturedAt || metadata?.lastFetchedAt || Date.now()).toISOString(),
+            duneExecutionEndedAt: snapshot?.executionEndedAt || metadata?.lastExecutionEndedAt || null,
+            source: 'cache-stale',
+            snapshotDate: today,
+            isStale: true,
+            staleReason: `Dune freshness check failed: ${String(error)}`,
+          }),
+          { status: 200, headers }
+        );
+      }
+
+      throw error;
+    }
+
+    const cachedExecutionEndedAt = snapshot?.executionEndedAt || metadata?.lastExecutionEndedAt || null;
+    const cacheIsFresh = cachedExecutionEndedAt === duneStatus.executionEndedAt;
+
+    if (!forceAuthorized && cached.length > 0) {
+      console.log(cacheIsFresh ? 'Serving from cache' : 'Serving stale cache');
+      return new Response(
+        JSON.stringify({
+          tokens: cached.map(deserializeFromConvex),
+          totalCount: cached.length,
+          fetchedAt: new Date(snapshot?.capturedAt || metadata?.lastFetchedAt || Date.now()).toISOString(),
+          duneExecutionEndedAt: cachedExecutionEndedAt,
+          latestDuneExecutionEndedAt: duneStatus.executionEndedAt,
+          source: cacheIsFresh ? 'cache' : 'cache-stale',
+          snapshotDate: today,
+          isStale: !cacheIsFresh,
+        }),
+        { status: 200, headers }
+      );
+    }
+
+    // Cache miss or authorized force refresh - fetch fresh data without mutating durable cache metadata.
+    console.log(forceAuthorized ? 'Authorized force refresh, fetching from Dune' : 'Cache miss, fetching from Dune');
     const { tokens: duneTokens, executionEndedAt } = await fetchDuneData(duneApiKey);
     const { tokens: enrichedTokens, failedEnrichments, enrichmentRate } = await enrichTokens(duneTokens);
 
     if (failedEnrichments.length > 0) {
       console.log(`DexScreener enrichment: ${failedEnrichments.length} tokens failed (${enrichmentRate.toFixed(1)}% success)`);
     }
-
-    // Only update cache metadata (snapshots are created by scheduled-sync only)
-    convex.mutation(api.duneMetadata.update, {
-      queryId: QUERY_ID,
-      lastExecutionEndedAt: executionEndedAt,
-      lastFetchedAt: Date.now(),
-      totalRowCount: duneTokens.length,
-    }).catch(err => console.error('Failed to update metadata:', err));
 
     return new Response(
       JSON.stringify({

@@ -11,6 +11,7 @@
 import type * as dailySnapshots from "../dailySnapshots.js";
 import type * as duneMetadata from "../duneMetadata.js";
 import type * as graduatedTokens from "../graduatedTokens.js";
+import type * as syncRuns from "../syncRuns.js";
 
 import type {
   ApiFromModules,
@@ -22,6 +23,7 @@ declare const fullApi: ApiFromModules<{
   dailySnapshots: typeof dailySnapshots;
   duneMetadata: typeof duneMetadata;
   graduatedTokens: typeof graduatedTokens;
+  syncRuns: typeof syncRuns;
 }>;
 
 /**

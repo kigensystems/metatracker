@@ -49,11 +49,11 @@ function App() {
   }, []);
 
   // Fetch tokens (supports live and historical modes)
-  const fetchTokens = useCallback(async (forceRefresh = false) => {
+  const fetchTokens = useCallback(async (bypassCache = false) => {
     const cacheKey = selectedDate || 'live';
 
-    // Check cache first (unless forcing refresh)
-    if (!forceRefresh) {
+    // Check client cache first unless the user explicitly refreshes.
+    if (!bypassCache) {
       const cached = cache.current.get(cacheKey);
       if (cached) {
         setTokens(cached.tokens);
@@ -71,7 +71,6 @@ function App() {
       const mode = selectedDate ? 'historical' : 'live';
       const params = new URLSearchParams({ mode });
       if (selectedDate) params.set('date', selectedDate);
-      if (forceRefresh && !selectedDate) params.set('force', 'true');
 
       const response = await fetch(`${API_BASE}/graduated?${params}`);
 

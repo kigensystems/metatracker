@@ -172,6 +172,15 @@ Open questions:
 - Whether third parties used the leaked key.
 - Whether Dune enforcement was automated and false-positive.
 
+API credit risk:
+
+- Normal scheduled sync credit burn is not currently a material concern.
+- Netlify observed `GET /api/graduated?mode=live` returning a `6.3 KB` JSON response on June 17, 2026.
+- The app's raw Dune result is likely smaller than the enriched app response because the Dune fetch only reads `token_address`, `asset`, `market_cap`, `trade_count`, and `vwap_token_price`.
+- At Dune's documented Free export rate of 20 credits per MB, a 6.3 KB response is roughly 0.12 credits. Even 60 scheduled pulls per month would be roughly 7-8 credits if charged at that size, far below the 2,500 monthly included credits.
+- The old `~400 credits` per full fetch estimate should be treated as stale and likely far too high for the current query shape.
+- Remaining credit risks are abuse of live/force refresh, unexpected query result growth, or production using a different Dune account/key context than the checked key.
+
 Current operating decision:
 
 - A replacement Dune API key is not currently available because the Dune account is banned.
@@ -183,8 +192,9 @@ Current operating decision:
 
 ### Known Product And Backend Risks
 
-- `force=true` is public and can cause production to call Dune. This should be protected or removed.
-- The live endpoint updates Dune metadata on live cache misses without storing a matching snapshot. This can make later cache checks believe Convex is fresh when stored token data is older than Dune metadata.
+- Production currently has public `force=true` behavior that can cause production to call Dune. The current working tree changes browser refresh to avoid `force=true` and requires `ADMIN_REFRESH_TOKEN` for server-side force refresh.
+- Production live cache misses update Dune metadata without storing a matching snapshot. This can make later cache checks believe Convex is fresh when stored token data is older than Dune metadata. The current working tree removes live metadata writes and treats scheduled sync as the owner of durable cache metadata.
+- Daily snapshot coverage can hide partial scheduled-sync failure because the app runs two cron slots per day but stores one `dailySnapshots` row per UTC date.
 - Live DexScreener enrichment still fans out requests in parallel, unlike `scheduled-sync`, which batches by 15 with a delay.
 - Client-side caching keeps a `live` result for the session with no TTL or freshness check.
 - Netlify/Convex function code is not fully covered by the root `tsconfig`; `npm run build` mostly validates frontend code.
@@ -197,9 +207,11 @@ P0 - Credential containment and abuse protection:
 
 - Keep the current Netlify `DUNE_API_KEY` unchanged until a replacement key is available.
 - Do not expose the key in any repo, docs, logs, screenshots, or local example files.
-- Disable, authenticate, or rate-limit `force=true`.
+- Disable unauthenticated `force=true`; allow it only for trusted admin calls with a server-side `ADMIN_REFRESH_TOKEN` header.
+- Keep browser manual refresh as a client-cache bypass only. It must not send `force=true` or expose any admin token.
 - Add server-side rate limiting for live/manual refresh.
 - Add stale-data fallback behavior so the app keeps serving the last good Convex snapshot if Dune access fails.
+- Keep `duneMetadata.lastExecutionEndedAt` tied to scheduled snapshot storage. Live/manual fetches may display live data but must not advance durable cache metadata unless a matching snapshot is stored.
 - Add explicit alerts for `401`, `402`, `403`, and `429` responses from Dune.
 - Coordinate git-history cleanup if the repo is public or may be cloned by others, but do not treat history cleanup as key rotation.
 - Appeal the Dune ban and request clarification on whether the API key is expected to keep working.
@@ -213,11 +225,12 @@ P0 - Credential recovery when Dune access is restored:
 
 P1 - Snapshot reliability and observability:
 
-- Add a Convex `syncRuns` table for every scheduled run attempt.
-- Record start time, end time, status, Dune status code, token count, enrichment success rate, error message, and source execution timestamp.
-- Write a `syncRuns` failure record before returning any scheduled-sync error.
-- Add a health endpoint that reports the latest successful scheduled run and latest daily snapshot.
-- Add an alert if no successful snapshot exists by 00:30 UTC and 12:30 UTC.
+- Current working tree adds a Convex `syncRuns` table for scheduled run attempts after Convex config/client initialization succeeds.
+- Current working tree tracks the expected cron slot (`00:00` or `12:00` UTC), start time, end time, status, Dune status code, token count, enrichment success rate, error message, and source execution timestamp.
+- Current working tree writes a best-effort `syncRuns` start record before the Dune fetch, then patches it on success or failure.
+- Use Netlify-side alerts for bootstrap failures that cannot be written to Convex, such as missing `CONVEX_URL`.
+- Current working tree adds a health endpoint that reports recent expected scheduled slots, the latest run, and the latest daily snapshot without calling Dune.
+- Add alerts if no successful scheduled run exists for the expected 00:00 UTC slot by 00:30 UTC or the expected 12:00 UTC slot by 12:30 UTC.
 - Keep daily snapshots and sync-run audit records independent, so future outages are diagnosable after Netlify logs expire.
 
 P1 - Dune data ownership:
@@ -228,11 +241,10 @@ P1 - Dune data ownership:
 - Add column limiting where possible to reduce result export cost.
 - Document Dune account/team context, key owner, and rotation procedure outside public docs.
 
-P1 - Cache correctness:
+P1 - Cache correctness follow-up:
 
-- Do not update `duneMetadata.lastExecutionEndedAt` unless the corresponding Convex snapshot was stored.
-- Alternatively, compare cached daily snapshot `executionEndedAt` with Dune status before serving cache.
-- Make live cache behavior explicit: live fetches can display fresh data, but only scheduled syncs create durable snapshots.
+- Keep live cache behavior explicit in API responses: `source: "cache"` is fresh against the latest Dune status, `source: "cache-stale"` is the last stored snapshot, and `source: "live"` is an uncached Dune fetch.
+- Add visible UI treatment for stale cached data.
 - Add a short TTL or freshness check to the frontend `live` client cache.
 
 P2 - Runtime hardening:
@@ -243,23 +255,108 @@ P2 - Runtime hardening:
 - Add an admin-only endpoint or CLI script for historical coverage reports.
 - Add token search and watchlist features only after reliability and credential work is complete.
 
+### Paused Work Note - June 17, 2026
+
+The current working tree contains uncommitted reliability hardening and observability work:
+
+- Admin-only `force=true` behavior using `ADMIN_REFRESH_TOKEN`.
+- Browser refresh changed to bypass only client cache, not force Dune fetches.
+- Live/cache behavior changed to avoid advancing `duneMetadata` unless a scheduled snapshot is stored.
+- Stale Convex snapshot fallback when Dune freshness checks or Dune key config fail.
+- New Convex `syncRuns` table and scheduled-sync start/success/failure audit writes.
+- New `/api/health` endpoint backed by Convex only, with no Dune call.
+- Shared bounded retry helper for Dune, Convex writes, and DexScreener transient failures.
+- Scheduled sync source metadata capture: execution ID, state, row counts, result size, HTTP status, and retry count.
+- Snapshot write guards that reject empty, paginated, malformed, or sharply lower replacement data before deleting good rows.
+- Admin-only `POST /api/backfill` endpoint for idempotent historical repair with explicit `window_start` / `window_end` Dune parameters.
+- Dedicated Netlify function typecheck script: `npm run typecheck:functions`.
+- Focused local health-slot tests via `npm run test:health`.
+
+Local checks run before pausing:
+
+```bash
+npm run test:health
+npm run typecheck:functions
+npm run build
+npx tsc --noEmit -p convex/tsconfig.json
+git diff --check
+```
+
+These checks passed before production deploy.
+
+### Production Rollout - June 18, 2026
+
+Deploy and smoke-test results:
+
+- Convex schema/functions were deployed to the Convex production deployment `qualified-hound-245`.
+- Netlify production was still configured with `CONVEX_URL=https://dusty-ox-307.convex.cloud`, so the same Convex changes were also pushed to `dusty-ox-307`, which is the backend the live site currently uses.
+- Netlify production deploy succeeded: `6a337f54e45349981179bedf`.
+- Production URL: `https://metratrackerapp.netlify.app`.
+- Manual scheduled-sync smoke test succeeded at `2026-06-18T05:15Z`: 36 tokens, 100% enrichment, Dune execution `01KVC5YNPQA8ZR9PNAB7W33XYS`, `retryCount: 0`.
+- `GET https://metratrackerapp.netlify.app/api/health` returned `200` at `2026-06-18T05:17:28Z` with `ok: true`, latest slot `2026-06-18T00:00:00.000Z`, latest run `status: "success"`, and `missingDueSlots: []`.
+- `GET /api/graduated?mode=live&force=true` without an admin header returned `403`, as expected.
+- `GET /api/available-dates` returned `200`.
+- `POST /api/backfill?date=2026-06-18&dryRun=true` without an admin header returns `403`, as expected. Backfill is deployed but intentionally unusable until `ADMIN_REFRESH_TOKEN` and `DUNE_BACKFILL_QUERY_ID` are configured.
+
+Closeout verification reran the same passing checks after this handoff section was updated.
+
+The previous ad hoc Netlify function typecheck gap is closed by `npm run typecheck:functions`, which includes a Netlify function `process.env` declaration and the scheduled background config cast.
+
+### Next Session Handoff - Data Reliability
+
+Finish the remaining rollout items before adding new product features:
+
+1. Durable sync audit: deployed and validated in production via `/api/health`.
+2. External health alert: now safe to configure an external uptime monitor against `https://metratrackerapp.netlify.app/api/health`; the endpoint is returning `200` after the first recorded sync run.
+3. Automatic retries: deployed; production smoke run completed with `retryCount: 0`.
+4. Backfillable Dune query: app-side support is ready through `DUNE_BACKFILL_QUERY_ID`, but the dedicated Dune query still must be forked or recreated under a controlled account/team with explicit `window_start` and `window_end` parameters.
+5. Idempotent backfill path: deployed as admin-only `POST /api/backfill`, but production backfill remains disabled until `ADMIN_REFRESH_TOKEN` and `DUNE_BACKFILL_QUERY_ID` are configured.
+6. Good-data preservation: deployed; scheduled-sync writes now go through Dune completeness checks and Convex snapshot replacement guards.
+7. Source metadata: deployed and visible in `/api/health` on `latestRun` and `latestSnapshot`.
+
+The main reliability gap is recoverability, not API credits. Monitoring tells us a gap exists; backfill is what prevents that gap from becoming permanent.
+
 ### Useful Production Checks
 
-Read-only checks that do not trigger Dune full fetches:
+Read-only checks that do not trigger Dune full-result fetches:
 
 ```bash
 curl "https://metratrackerapp.netlify.app/api/available-dates"
 curl "https://metratrackerapp.netlify.app/api/graduated?mode=historical&date=YYYY-MM-DD"
+curl "https://metratrackerapp.netlify.app/api/health"
 curl "https://metratrackerapp.netlify.app/api/graduated?mode=check-freshness"
 ```
+
+`/api/health` reads Convex sync audit data and daily snapshots only. It should return `503` when an expected scheduled slot is past its 30-minute grace window without a successful sync run.
+
+`mode=check-freshness` still calls Dune's metadata endpoint with the production key. Treat it as a bounded live-provider check, not as a purely local health check.
+
+### External Health Alert
+
+Create this in an external uptime monitor, not inside Netlify, so Netlify scheduler outages can still be detected:
+
+```text
+Monitor URL: https://metratrackerapp.netlify.app/api/health
+Method: GET
+Expected healthy status: 200
+Alert on: 503, 5xx, timeout, or connection failure
+Check interval: 5-15 minutes
+Notification destination: project owner email, or the team's normal incident channel
+```
+
+After the June 18, 2026 rollout, `/api/health` is returning `200` because a successful sync run has been recorded. It is now safe to create or enable the external monitor.
+
+The alert should say that `meta.tracker` scheduled sync health is failing and link to `/api/health`. The JSON response includes `missingDueSlots`, `latestRun`, and `latestSnapshot`, which are the first fields to inspect.
 
 Use caution with:
 
 ```bash
-curl "https://metratrackerapp.netlify.app/api/graduated?mode=live&force=true"
+curl \
+  -H "x-admin-refresh-token: $ADMIN_REFRESH_TOKEN" \
+  "https://metratrackerapp.netlify.app/api/graduated?mode=live&force=true"
 ```
 
-`force=true` can trigger Dune result retrieval and should be treated as a budgeted operation until protected.
+`force=true` can trigger Dune result retrieval and should be treated as a budgeted operation. It must return `403` without a valid admin token once the hardening branch is deployed.
 
 ---
 
@@ -326,20 +423,22 @@ curl "https://metratrackerapp.netlify.app/api/graduated?mode=live&force=true"
 
 ### Smart Cache Invalidation
 1. Fetch Dune metadata (`?limit=0`) - low-cost metadata check
-2. Compare `execution_ended_at` with cached value
-3. If same -> serve from Convex
-4. If different -> full fetch from Dune, enrich, and return live data
+2. Compare `execution_ended_at` with the stored daily snapshot execution time
+3. If same -> serve from Convex as `source: "cache"`
+4. If different and a stored snapshot exists -> serve from Convex as `source: "cache-stale"` and keep Dune calls bounded
+5. If no snapshot exists, or an authorized admin force refresh is requested -> full fetch from Dune, enrich, and return live data without updating durable metadata
 
 ### Cache Hit Flow
 ```
 Frontend → Netlify Function → Check Dune metadata
                                     ↓
-                            Same as cached?
-                            ├─ YES → Serve from Convex (instant)
-                            └─ NO  → Fetch from Dune, enrich, return
+                            Stored snapshot?
+                            ├─ YES + fresh → Serve from Convex
+                            ├─ YES + stale → Serve stale Convex snapshot with stale marker
+                            └─ NO          → Fetch from Dune, enrich, return live data
 ```
 
-**Known issue**: Only the scheduled sync (00:00/12:00 UTC) stores durable daily snapshots in Convex. Live/manual refreshes should not update `duneMetadata` unless they also store matching token data, otherwise later cache checks can treat stale Convex token data as fresh.
+Only scheduled sync (00:00/12:00 UTC) should store durable daily snapshots in Convex and update `duneMetadata`. Live/manual refreshes may return live data, but they must not update `duneMetadata` unless they also store matching token data.
 
 ---
 
@@ -358,14 +457,16 @@ meta-tracker/
 │   └── logo.png                  # Pixel art logo (favicon + header)
 │
 ├── convex/                       # Convex database
-│   ├── schema.ts                 # Tables: duneMetadata, dailySnapshots, graduatedTokens
+│   ├── schema.ts                 # Tables: duneMetadata, dailySnapshots, syncRuns, graduatedTokens
 │   ├── duneMetadata.ts           # Cache metadata queries/mutations
 │   ├── graduatedTokens.ts        # Token storage and queries
-│   └── dailySnapshots.ts         # Historical date listing
+│   ├── dailySnapshots.ts         # Historical date listing
+│   └── syncRuns.ts               # Scheduled sync audit log
 │
 ├── netlify/functions/
 │   ├── graduated.ts              # Main API - modes: live, historical, check-freshness
 │   ├── available-dates.ts        # List stored historical dates
+│   ├── health.ts                 # Read-only sync health and slot coverage endpoint
 │   └── scheduled-sync.ts         # Automated 12-hour sync (background function)
 │
 └── src/
@@ -430,7 +531,7 @@ meta-tracker/
 |-------|--------|-------------|
 | `mode` | `live` (default), `historical`, `check-freshness` | Data mode |
 | `date` | `YYYY-MM-DD` | Required for historical mode |
-| `force` | `true` | Bypass cache, force fresh fetch |
+| `force` | `true` | Admin-only fresh fetch. Requires `x-admin-refresh-token` matching `ADMIN_REFRESH_TOKEN`; browser UI must not use it. |
 
 **Response**:
 ```json
@@ -439,7 +540,7 @@ meta-tracker/
   "totalCount": 122,
   "fetchedAt": "2025-12-05T...",
   "duneExecutionEndedAt": "2025-12-05T...",
-  "source": "live" | "cache" | "historical",
+  "source": "live" | "cache" | "cache-stale" | "historical",
   "snapshotDate": "2025-12-05",  // Server's UTC date (for live/cache modes)
   "enrichment": {
     "failedCount": 2,
@@ -452,6 +553,30 @@ meta-tracker/
 
 Returns list of dates with stored snapshots for the date picker.
 
+### `GET /.netlify/functions/health`
+
+Returns Convex-backed sync health without calling Dune. Reports the latest daily snapshot, latest sync run, recent expected 00:00/12:00 UTC slots, and any due slots missing a successful run. Returns `503` when a due slot has no successful run.
+
+### `POST /.netlify/functions/backfill`
+
+Admin-only historical repair endpoint. Requires `x-admin-refresh-token` matching `ADMIN_REFRESH_TOKEN` and a configured `DUNE_BACKFILL_QUERY_ID`.
+
+Accepted JSON body or query params:
+
+```json
+{
+  "date": "YYYY-MM-DD",
+  "slotHour": 0,
+  "dryRun": true,
+  "replaceExisting": false,
+  "executionId": "optional-existing-dune-execution-id"
+}
+```
+
+Default behavior is idempotent: if the date already has a non-empty snapshot, the endpoint returns `skipped: true` without calling Dune unless `replaceExisting=true` is provided. `dryRun=true` validates the date/window and reports existing snapshot state without calling Dune.
+
+The Dune backfill query must accept `window_start` and `window_end` parameters and return the same columns used by the live query: `token_address`, `asset`, `market_cap`, `trade_count`, and `vwap_token_price`.
+
 ---
 
 ## Environment Variables
@@ -459,6 +584,12 @@ Returns list of dates with stored snapshots for the date picker.
 ```bash
 # Required
 DUNE_API_KEY=your_dune_api_key
+
+# Optional admin backfill query. Required only for POST /api/backfill.
+DUNE_BACKFILL_QUERY_ID=
+
+# Optional admin-only force refresh token. Leave blank to disable force refresh.
+ADMIN_REFRESH_TOKEN=
 
 # Convex (auto-generated by `npx convex dev`)
 CONVEX_URL=https://your-project.convex.cloud
@@ -483,10 +614,23 @@ npx netlify dev
 # Opens at http://localhost:8888
 ```
 
+### Verification
+```bash
+npm run test:health
+npm run typecheck:functions
+npm run build
+npx tsc --noEmit -p convex/tsconfig.json
+git diff --check
+```
+
 ### Force Refresh Data
 ```bash
-curl "http://localhost:8888/.netlify/functions/graduated?force=true"
+curl \
+  -H "x-admin-refresh-token: $ADMIN_REFRESH_TOKEN" \
+  "http://localhost:8888/.netlify/functions/graduated?force=true"
 ```
+
+Do not expose `ADMIN_REFRESH_TOKEN` to the browser. The normal UI refresh button should only bypass the browser cache and should not send `force=true`.
 
 ### Production Deploy
 ```bash
@@ -512,7 +656,12 @@ Tracks Dune query execution state for cache invalidation.
   queryId: string,
   lastExecutionEndedAt: string,  // ISO timestamp
   lastFetchedAt: number,          // Unix ms
-  totalRowCount: number
+  totalRowCount: number,
+  lastExecutionId?: string,
+  lastDuneState?: string,
+  lastResponseStatusCode?: number,
+  lastRowCount?: number,
+  lastResultSizeBytes?: number
 }
 ```
 
@@ -523,7 +672,49 @@ Index of available historical dates.
   date: string,           // "2025-12-05"
   executionEndedAt: string,
   capturedAt: number,
-  tokenCount: number
+  tokenCount: number,
+  duneQueryId?: string,
+  duneExecutionId?: string,
+  duneState?: string,
+  duneResponseStatusCode?: number,
+  duneRowCount?: number,
+  duneTotalRowCount?: number,
+  duneResultSizeBytes?: number,
+  sourceQueryKind?: string,
+  windowStart?: string,
+  windowEnd?: string
+}
+```
+
+### `syncRuns`
+Audit log for scheduled sync attempts.
+```typescript
+{
+  queryId: string,
+  slot: string,            // ISO timestamp for expected 00:00/12:00 UTC slot
+  slotDate: string,        // "2025-12-05"
+  slotHour: number,        // 0 or 12
+    trigger: string,         // "scheduled" or "admin-backfill"
+  status: string,          // "running", "success", or "failed"
+  startedAt: number,
+  endedAt?: number,
+  retryCount?: number,
+  duneStatusCode?: number,
+  duneExecutionId?: string,
+  duneExecutionEndedAt?: string,
+  duneState?: string,
+  duneRowCount?: number,
+  duneTotalRowCount?: number,
+  duneResultSizeBytes?: number,
+  sourceQueryKind?: string,
+  windowStart?: string,
+  windowEnd?: string,
+  snapshotDate?: string,
+  tokenCount?: number,
+  enrichedCount?: number,
+  enrichmentFailedCount?: number,
+  enrichmentSuccessRate?: number,
+  errorMessage?: string
 }
 ```
 
@@ -560,10 +751,14 @@ Token data linked to daily snapshots.
 **Type**: Background function (15-minute timeout)
 
 **Process**:
-1. Fetch all tokens from Dune query
-2. Enrich with DexScreener (batched, 15 at a time with 500ms delay)
-3. Store snapshot in Convex
-4. Update metadata cache
+1. Record a best-effort `syncRuns` start row for the expected cron slot
+2. Fetch all tokens from Dune query
+3. Enrich with DexScreener (batched, 15 at a time with 500ms delay)
+4. Store snapshot in Convex
+5. Update metadata cache
+6. Patch the `syncRuns` row with success or failure details
+
+Daily snapshots are one row per UTC date. A single successful run can make the date look covered even if the other cron slot failed, so operational health should be based on a separate `syncRuns` table keyed by expected 00:00 and 12:00 UTC slots.
 
 ---
 
@@ -572,17 +767,21 @@ Token data linked to daily snapshots.
 | Action | Dune Credits |
 |--------|--------------|
 | Cache hit (metadata check) | ~0 |
-| Cache miss (full fetch) | ~400 |
+| Stale cache served from Convex | metadata check only |
+| Cache miss with no stored snapshot | result-size based; currently expected to be very small |
+| Authorized admin force refresh | result-size based; budgeted operation |
 | Historical browse | 0 |
-| Scheduled sync | ~400 |
+| Scheduled sync | result-size based; currently expected to be very small |
 
-**Monthly estimate**: ~25,000 credits (well within free tier)
+**Current estimate**: API credits are not a concern for the current query shape. Netlify observed `GET /api/graduated?mode=live` returning about `6.3 KB` on June 17, 2026. At Dune's documented Free export rate of 20 credits per MB, that is roughly `0.12` credits per full result export, or about `7-8` credits for 60 scheduled pulls per month. This is far below the 2,500 monthly included credits.
+
+The old `~400 credits` per fetch estimate was based on a larger assumed result shape and should not be used for current budgeting. Recheck this estimate if the Dune query starts returning many more rows or columns.
 
 ---
 
 ## Recent Changes
 
-### Dec 7, 2024 (Session 2) - UX Cleanup & Performance
+### Dec 7, 2025 (Session 2) - UX Cleanup & Performance
 
 **Visual Refresh**
 - Softened color palette: neon green (#39ff14) → muted green (#22c55e)
@@ -617,7 +816,7 @@ Token data linked to daily snapshots.
 
 ---
 
-### Dec 7, 2024 (Session 1) - MUI Integration & Snapshot Reliability
+### Dec 7, 2025 (Session 1) - MUI Integration & Snapshot Reliability
 
 **MUI Component Library**
 - Added Material-UI (`@mui/material`, `@emotion/react`, `@emotion/styled`, `@mui/icons-material`)
@@ -653,7 +852,7 @@ Token data linked to daily snapshots.
 
 ---
 
-### Dec 6, 2024 - UI Overhaul & Production Deploy
+### Dec 6, 2025 - UI Overhaul & Production Deploy
 
 **Header Simplification**
 - Removed cluttered stats (Tracking X/X, Dune data freshness, source badges)
@@ -697,7 +896,7 @@ Token data linked to daily snapshots.
 
 ---
 
-### Dec 5, 2024 - Rebrand & Initial Features
+### Dec 5, 2025 - Rebrand & Initial Features
 - Renamed from "pump.tracker" to "meta.tracker"
 - Added pixel art logo (`public/logo.png`)
 - Added "Press Start 2P" pixel font for branding
@@ -711,16 +910,17 @@ Token data linked to daily snapshots.
 ## Future Improvements
 
 - [ ] Keep current Netlify `DUNE_API_KEY` in place until a tested replacement exists
-- [ ] Protect or remove public `force=true`
-- [ ] Add durable Convex `syncRuns` observability
-- [ ] Add scheduled-sync alerting for missing snapshots
+- [x] Protect public `force=true` in the current working tree
+- [x] Add durable Convex `syncRuns` observability in the current working tree
+- [ ] Add scheduled-sync alerting for each expected cron slot
 - [ ] Appeal Dune ban and confirm whether existing API key should keep working
-- [ ] Add stale-data fallback if Dune access fails
+- [x] Add stale-data fallback if Dune freshness checks or key config fail in the current working tree
+- [x] Add bounded retries, safer snapshot writes, richer source metadata, and admin backfill path in the current working tree
 - [ ] Rotate Dune credentials and revoke the exposed key after account/key recovery
 - [ ] Fork or recreate the Dune query under a controlled account/team
-- [ ] Fix live metadata/cache mismatch
+- [x] Fix live metadata/cache mismatch in the current working tree
 - [ ] Batch live DexScreener enrichment
-- [ ] Add typecheck coverage for Netlify and Convex code
+- [x] Add typecheck coverage for Netlify and Convex code
 - [ ] Add token search by name/symbol
 - [ ] Real-time updates via Helius WebSocket
 - [ ] Token watchlist (saved to local storage)

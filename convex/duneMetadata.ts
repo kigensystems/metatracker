@@ -17,6 +17,11 @@ export const update = mutation({
     lastExecutionEndedAt: v.string(),
     lastFetchedAt: v.number(),
     totalRowCount: v.number(),
+    lastExecutionId: v.optional(v.string()),
+    lastDuneState: v.optional(v.string()),
+    lastResponseStatusCode: v.optional(v.number()),
+    lastRowCount: v.optional(v.number()),
+    lastResultSizeBytes: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -29,6 +34,11 @@ export const update = mutation({
         lastExecutionEndedAt: args.lastExecutionEndedAt,
         lastFetchedAt: args.lastFetchedAt,
         totalRowCount: args.totalRowCount,
+        lastExecutionId: args.lastExecutionId,
+        lastDuneState: args.lastDuneState,
+        lastResponseStatusCode: args.lastResponseStatusCode,
+        lastRowCount: args.lastRowCount,
+        lastResultSizeBytes: args.lastResultSizeBytes,
       });
       return existing._id;
     } else {
