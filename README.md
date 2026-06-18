@@ -98,12 +98,14 @@ The scheduled Netlify background function:
 
 Daily snapshots are one row per UTC date. A date can have data even if one of the two daily cron slots failed, so operational health should come from `syncRuns` and `/api/health`, not from snapshot presence alone.
 
+The current live Dune query is rolling recent-window data, not a calendar-day query. Raw Convex snapshot dates identify when the rolling result was stored. User-facing historical tabs are grouped from stored token rows by the same Pacific token creation date displayed in the table.
+
 ## Frontend Behavior
 
 - Header shows logo, last updated timestamp, next scheduled sync countdown, token count, and refresh.
-- Date picker shows Today plus recent snapshot dates.
+- Date picker shows the latest rolling 24h data plus recent token-created dates.
 - Token table supports market-cap sorting, 50-row pagination, DexScreener row links, and website/X links when available.
-- Historical date tabs filter out empty snapshots.
+- Historical date tabs filter out empty token-created dates.
 - Manual browser refresh only bypasses the client cache. It does not send `force=true`.
 
 ## Runtime Endpoints
@@ -124,9 +126,11 @@ Parameters:
 
 Unauthenticated `force=true` must return `403`.
 
+For `mode=historical`, `date` is interpreted as the token-created date shown in the UI, not the raw Convex snapshot storage date.
+
 ### `GET /api/available-dates`
 
-Returns recent Convex snapshot dates and token counts for the date picker.
+Returns recent token-created dates and token counts for the date picker. Counts are derived from stored Convex snapshots, deduped by mint, and grouped by the Pacific date shown in token rows.
 
 ### `GET /api/health`
 

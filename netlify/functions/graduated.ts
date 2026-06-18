@@ -1,6 +1,7 @@
 import type { Context } from '@netlify/functions';
 import { ConvexHttpClient } from 'convex/browser';
 import { api } from '../../convex/_generated/api';
+import { filterTokensByDisplayDate, TOKEN_DISPLAY_TIME_ZONE } from './_shared/token-dates';
 
 interface DuneGraduatedToken {
   mint: string;
@@ -326,19 +327,23 @@ export default async function handler(request: Request, _context: Context) {
         );
       }
 
-      const [tokens, snapshot] = await Promise.all([
-        convex.query(api.graduatedTokens.byDate, { date }),
-        convex.query(api.dailySnapshots.byDate, { date }),
-      ]);
+      const recentTokens = await convex.query(api.graduatedTokens.recentStored, { snapshotLimit: 60 });
+      const tokens = filterTokensByDisplayDate(recentTokens, date);
+      const capturedAt = tokens.reduce(
+        (latest, token) => Math.max(latest, token.snapshotCapturedAt || token._creationTime || 0),
+        0,
+      );
 
       return new Response(
         JSON.stringify({
           tokens: tokens.map(deserializeFromConvex),
           totalCount: tokens.length,
           snapshotDate: date,
-          capturedAt: snapshot?.capturedAt || null,
-          duneExecutionEndedAt: snapshot?.executionEndedAt || null,
+          capturedAt: capturedAt || null,
+          duneExecutionEndedAt: null,
           source: 'historical',
+          dateMode: 'token-created-date',
+          timeZone: TOKEN_DISPLAY_TIME_ZONE,
         }),
         { status: 200, headers }
       );

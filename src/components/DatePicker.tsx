@@ -12,6 +12,7 @@ interface DatePickerProps {
   onDateChange: (date: string | null) => void;
   isLoading?: boolean;
   liveDataDate?: string | null;
+  liveTokenCount?: number;
 }
 
 function formatDate(dateStr: string): string {
@@ -23,32 +24,45 @@ function formatDate(dateStr: string): string {
   });
 }
 
+function getLocalDateKey(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export function DatePicker({
   selectedDate,
   availableDates,
   onDateChange,
   isLoading = false,
   liveDataDate,
+  liveTokenCount,
 }: DatePickerProps) {
-  const isToday = selectedDate === null;
-  const today = liveDataDate || new Date().toISOString().split('T')[0];
+  const isLiveSelected = selectedDate === null;
+  const liveSnapshotDate = liveDataDate || getLocalDateKey();
 
   const historicalDates = availableDates
-    .filter(d => d.tokenCount > 0 && d.date !== today)
+    .filter(d => d.tokenCount > 0)
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 7);
 
-  const todayData = availableDates.find(d => d.date === today);
-  const todayCount = todayData?.tokenCount;
-
   return (
-    <Box sx={{ mb: 3 }}>
+    <Box
+      sx={{
+        mb: 3,
+        overflowX: 'auto',
+        pb: 0.5,
+      }}
+    >
       <ButtonGroup
         variant="outlined"
         size="small"
         sx={{
+          minWidth: 'max-content',
           '& .MuiButtonGroup-grouped': {
             borderColor: 'divider',
+            whiteSpace: 'nowrap',
             '&:hover': {
               borderColor: 'divider',
               backgroundColor: 'action.hover',
@@ -56,17 +70,18 @@ export function DatePicker({
           },
         }}
       >
-        {/* Today tab */}
+        {/* Latest rolling 24h tab */}
         <Button
           onClick={() => onDateChange(null)}
           disabled={isLoading}
+          title={`Latest rolling 24h snapshot (${formatDate(liveSnapshotDate)})`}
           sx={{
             px: 2,
             py: 0.75,
             textTransform: 'none',
             fontWeight: 500,
             fontSize: '0.8125rem',
-            ...(isToday
+            ...(isLiveSelected
               ? {
                   backgroundColor: 'rgba(34, 197, 94, 0.1)',
                   borderColor: 'primary.main',
@@ -81,8 +96,8 @@ export function DatePicker({
                 }),
           }}
         >
-          Today
-          {todayCount !== undefined && (
+          Latest 24h
+          {liveTokenCount !== undefined && (
             <Typography
               component="span"
               sx={{
@@ -92,7 +107,7 @@ export function DatePicker({
                 opacity: 0.7,
               }}
             >
-              {todayCount}
+              {liveTokenCount}
             </Typography>
           )}
         </Button>
@@ -123,8 +138,9 @@ export function DatePicker({
                     }
                   : {
                       color: 'text.secondary',
-                    }),
+                }),
               }}
+              title={`Tokens created on ${formatDate(date)}`}
             >
               {formatDate(date)}
               <Typography

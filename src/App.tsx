@@ -30,6 +30,7 @@ function App() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [availableDates, setAvailableDates] = useState<AvailableDate[]>([]);
   const [liveDataDate, setLiveDataDate] = useState<string | null>(null);
+  const [liveTokenCount, setLiveTokenCount] = useState<number | null>(null);
   const [page, setPage] = useState(1);
 
   // Client-side cache for fetched data
@@ -57,6 +58,9 @@ function App() {
       const cached = cache.current.get(cacheKey);
       if (cached) {
         setTokens(cached.tokens);
+        if (cacheKey === 'live') {
+          setLiveTokenCount(cached.tokens.length);
+        }
         setLastUpdated(cached.lastUpdated);
         setLoading(false);
         setError(null);
@@ -93,9 +97,10 @@ function App() {
       // Store in cache
       cache.current.set(cacheKey, { tokens: fetchedTokens, lastUpdated: updatedAt });
 
-      // Capture the server's date for live data (to filter from historical)
+      // Capture live metadata for the rolling 24h tab.
       if (mode === 'live' && data.snapshotDate) {
         setLiveDataDate(data.snapshotDate);
+        setLiveTokenCount(fetchedTokens.length);
       }
 
       // Refresh available dates after a live fetch (new data might be stored)
@@ -158,6 +163,7 @@ function App() {
               onDateChange={handleDateChange}
               isLoading={loading}
               liveDataDate={liveDataDate}
+              liveTokenCount={liveTokenCount ?? undefined}
             />
           </div>
 
