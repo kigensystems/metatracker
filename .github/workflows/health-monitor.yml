@@ -1,0 +1,126 @@
+name: Health Monitor
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check production health
+        id: check
+        continue-on-error: true
+        env:
+          HEALTH_URL: https://metratrackerapp.netlify.app/api/health
+        run: |
+          set -euo pipefail
+
+          body="$(mktemp)"
+          status="$(curl -sS --max-time 20 -o "$body" -w "%{http_code}" "$HEALTH_URL")"
+
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          {
+            echo "body<<EOF"
+            cat "$body"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          node - "$body" "$status" <<'NODE'
+          const fs = require("node:fs");
+          const [bodyPath, statusText] = process.argv.slice(2);
+          const status = Number(statusText);
+          const body = fs.readFileSync(bodyPath, "utf8");
+
+          let payload;
+          try {
+            payload = JSON.parse(body);
+          } catch (error) {
+            console.error(`Health endpoint returned non-JSON response with status ${status}`);
+            console.error(body);
+            process.exit(1);
+          }
+
+          if (status !== 200 || payload.ok !== true) {
+            console.error(`Health endpoint unhealthy: status=${status}, ok=${payload.ok}`);
+            console.error(JSON.stringify({
+              checkedAt: payload.checkedAt,
+              missingDueSlots: payload.missingDueSlots,
+              latestRun: payload.latestRun,
+              latestSnapshot: payload.latestSnapshot,
+            }, null, 2));
+            process.exit(1);
+          }
+
+          console.log(`Health endpoint OK at ${payload.checkedAt}`);
+          NODE
+
+      - name: Open or update alert issue
+        if: steps.check.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          STATUS: ${{ steps.check.outputs.status }}
+          BODY: ${{ steps.check.outputs.body }}
+          TITLE: meta.tracker scheduled sync health failing
+        run: |
+          set -euo pipefail
+
+          issue_number="$(gh issue list \
+            --repo "$GH_REPO" \
+            --state open \
+            --search "\"$TITLE\" in:title" \
+            --json number,title \
+            --jq '.[] | select(.title == env.TITLE) | .number' \
+            | head -n 1)"
+
+          message="$(cat <<EOF
+          Production health check failed.
+
+          URL: https://metratrackerapp.netlify.app/api/health
+          HTTP status: $STATUS
+          Workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+
+          Response:
+          \`\`\`json
+          $BODY
+          \`\`\`
+          EOF
+          )"
+
+          if [ -n "$issue_number" ]; then
+            gh issue comment "$issue_number" --repo "$GH_REPO" --body "$message"
+          else
+            gh issue create --repo "$GH_REPO" --title "$TITLE" --body "$message"
+          fi
+
+          exit 1
+
+      - name: Close resolved alert issue
+        if: steps.check.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TITLE: meta.tracker scheduled sync health failing
+        run: |
+          set -euo pipefail
+
+          issue_number="$(gh issue list \
+            --repo "$GH_REPO" \
+            --state open \
+            --search "\"$TITLE\" in:title" \
+            --json number,title \
+            --jq '.[] | select(.title == env.TITLE) | .number' \
+            | head -n 1)"
+
+          if [ -n "$issue_number" ]; then
+            gh issue close "$issue_number" \
+              --repo "$GH_REPO" \
+              --comment "Production health check recovered in $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."
+          fi

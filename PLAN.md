@@ -297,6 +297,11 @@ Deploy and smoke-test results:
 - `GET /api/graduated?mode=live&force=true` without an admin header returned `403`, as expected.
 - `GET /api/available-dates` returned `200`.
 - `POST /api/backfill?date=2026-06-18&dryRun=true` without an admin header returns `403`, as expected. Backfill is deployed but intentionally unusable until `ADMIN_REFRESH_TOKEN` and `DUNE_BACKFILL_QUERY_ID` are configured.
+- Follow-up operations on June 18, 2026:
+  - Added GitHub Actions external health monitor in `.github/workflows/health-monitor.yml`.
+  - Set `ADMIN_REFRESH_TOKEN` in Netlify production.
+  - Created public Dune backfill query `7746626` after private-query creation hit Dune's private-query quota.
+  - Set `DUNE_BACKFILL_QUERY_ID=7746626` in Netlify production.
 
 Closeout verification reran the same passing checks after this handoff section was updated.
 
@@ -307,10 +312,10 @@ The previous ad hoc Netlify function typecheck gap is closed by `npm run typeche
 Finish the remaining rollout items before adding new product features:
 
 1. Durable sync audit: deployed and validated in production via `/api/health`.
-2. External health alert: now safe to configure an external uptime monitor against `https://metratrackerapp.netlify.app/api/health`; the endpoint is returning `200` after the first recorded sync run.
+2. External health alert: configured through GitHub Actions `.github/workflows/health-monitor.yml`, which checks `https://metratrackerapp.netlify.app/api/health` every 10 minutes and opens/comments on one alert issue when unhealthy.
 3. Automatic retries: deployed; production smoke run completed with `retryCount: 0`.
-4. Backfillable Dune query: app-side support is ready through `DUNE_BACKFILL_QUERY_ID`, but the dedicated Dune query still must be forked or recreated under a controlled account/team with explicit `window_start` and `window_end` parameters.
-5. Idempotent backfill path: deployed as admin-only `POST /api/backfill`, but production backfill remains disabled until `ADMIN_REFRESH_TOKEN` and `DUNE_BACKFILL_QUERY_ID` are configured.
+4. Backfillable Dune query: public Dune query `7746626` is configured with explicit `window_start` and `window_end` parameters.
+5. Idempotent backfill path: deployed as admin-only `POST /api/backfill`; production env now has `ADMIN_REFRESH_TOKEN` and `DUNE_BACKFILL_QUERY_ID=7746626`.
 6. Good-data preservation: deployed; scheduled-sync writes now go through Dune completeness checks and Convex snapshot replacement guards.
 7. Source metadata: deployed and visible in `/api/health` on `latestRun` and `latestSnapshot`.
 
@@ -344,7 +349,7 @@ Check interval: 5-15 minutes
 Notification destination: project owner email, or the team's normal incident channel
 ```
 
-After the June 18, 2026 rollout, `/api/health` is returning `200` because a successful sync run has been recorded. It is now safe to create or enable the external monitor.
+After the June 18, 2026 rollout, `/api/health` is returning `200` because a successful sync run has been recorded. The GitHub Actions monitor is configured in `.github/workflows/health-monitor.yml`.
 
 The alert should say that `meta.tracker` scheduled sync health is failing and link to `/api/health`. The JSON response includes `missingDueSlots`, `latestRun`, and `latestSnapshot`, which are the first fields to inspect.
 
@@ -586,7 +591,7 @@ The Dune backfill query must accept `window_start` and `window_end` parameters a
 DUNE_API_KEY=your_dune_api_key
 
 # Optional admin backfill query. Required only for POST /api/backfill.
-DUNE_BACKFILL_QUERY_ID=
+DUNE_BACKFILL_QUERY_ID=7746626
 
 # Optional admin-only force refresh token. Leave blank to disable force refresh.
 ADMIN_REFRESH_TOKEN=
