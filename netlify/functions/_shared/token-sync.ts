@@ -8,6 +8,12 @@ export interface DuneGraduatedToken {
   vwapPrice: number;
 }
 
+export interface TokenLinks {
+  dexscreener: string;
+  birdeye: string;
+  solscan: string;
+}
+
 export interface StoredToken {
   mint: string;
   symbol: string;
@@ -24,6 +30,7 @@ export interface StoredToken {
   dexScreenerUrl: string;
   website?: string;
   twitter?: string;
+  telegram?: string;
 }
 
 export interface DuneSourceMetadata {
@@ -45,6 +52,13 @@ export interface DuneFetchResult {
   tokens: DuneGraduatedToken[];
   executionEndedAt: string;
   sourceMetadata: DuneSourceMetadata;
+}
+
+export interface DuneLatestStatus {
+  executionEndedAt: string;
+  state: string;
+  responseStatusCode: number;
+  executionId?: string;
 }
 
 export interface EnrichmentResult {
@@ -118,6 +132,14 @@ export class DuneApiError extends Error {
     this.statusCode = statusCode;
     this.responseText = responseText;
   }
+}
+
+export function buildTokenLinks(mint: string): TokenLinks {
+  return {
+    dexscreener: `https://dexscreener.com/solana/${mint}`,
+    birdeye: `https://birdeye.so/token/${mint}?chain=solana`,
+    solscan: `https://solscan.io/token/${mint}`,
+  };
 }
 
 export class DuneExecutionPendingError extends Error {
@@ -285,6 +307,28 @@ export async function fetchLatestDuneData(
   });
 
   return parseDuneResponse(response, queryId, "latest");
+}
+
+export async function fetchLatestDuneStatus(
+  apiKey: string,
+  queryId = DEFAULT_DUNE_QUERY_ID,
+): Promise<DuneLatestStatus> {
+  const response = await fetch(`${DUNE_API_BASE}/query/${queryId}/results?limit=0`, {
+    headers: { "X-Dune-API-Key": apiKey },
+  });
+  const responseText = await response.text();
+
+  if (!response.ok) {
+    throw new DuneApiError(`Dune API error: ${response.status}`, response.status, responseText);
+  }
+
+  const data = JSON.parse(responseText) as DuneResponse;
+  return {
+    executionEndedAt: data.execution_ended_at || new Date().toISOString(),
+    state: data.state || "QUERY_STATE_COMPLETED",
+    responseStatusCode: response.status,
+    executionId: data.execution_id,
+  };
 }
 
 export async function startDuneBackfillExecution(
@@ -460,6 +504,7 @@ export async function enrichTokens(tokens: DuneGraduatedToken[]): Promise<Enrich
       dex?.info?.socials?.forEach((social) => {
         socials[social.type] = social.url;
       });
+      const links = buildTokenLinks(token.mint);
 
       return {
         mint: token.mint,
@@ -473,14 +518,11 @@ export async function enrichTokens(tokens: DuneGraduatedToken[]): Promise<Enrich
         priceChange24h: dex?.priceChange?.h24 || undefined,
         tradeCount: token.tradeCount || undefined,
         createdAt: dex?.pairCreatedAt || undefined,
-        linksJson: JSON.stringify({
-          dexscreener: `https://dexscreener.com/solana/${token.mint}`,
-          birdeye: `https://birdeye.so/token/${token.mint}?chain=solana`,
-          solscan: `https://solscan.io/token/${token.mint}`,
-        }),
-        dexScreenerUrl: `https://dexscreener.com/solana/${token.mint}`,
+        linksJson: JSON.stringify(links),
+        dexScreenerUrl: links.dexscreener,
         website: dex?.info?.websites?.[0]?.url || undefined,
         twitter: socials.twitter || undefined,
+        telegram: socials.telegram || undefined,
       };
     });
 

@@ -197,7 +197,7 @@ Current operating decision:
 - Production currently has public `force=true` behavior that can cause production to call Dune. The current working tree changes browser refresh to avoid `force=true` and requires `ADMIN_REFRESH_TOKEN` for server-side force refresh.
 - Production live cache misses update Dune metadata without storing a matching snapshot. This can make later cache checks believe Convex is fresh when stored token data is older than Dune metadata. The current working tree removes live metadata writes and treats scheduled sync as the owner of durable cache metadata.
 - Daily snapshot coverage can hide partial scheduled-sync failure because the app runs two cron slots per day but stores one `dailySnapshots` row per UTC date.
-- Live DexScreener enrichment still fans out requests in parallel, unlike `scheduled-sync`, which batches by 15 with a delay.
+- Live DexScreener enrichment now reuses the shared batched helper used by `scheduled-sync`, so live/manual fetches no longer fan out every DexScreener request at once.
 - Client-side caching keeps a `live` result for the session with no TTL or freshness check.
 - Netlify/Convex function code is not fully covered by the root `tsconfig`; `npm run build` mostly validates frontend code.
 - No durable sync-failure records are stored in Convex. Once Netlify logs expire, historical root cause is hard to recover.
@@ -251,9 +251,9 @@ P1 - Cache correctness follow-up:
 
 P2 - Runtime hardening:
 
-- Reuse the scheduled-sync batching approach for live DexScreener enrichment.
+- Keep live/manual Dune fetches on the same shared Dune parsing, result-completeness guard, token-link, and batched DexScreener enrichment path used by scheduled syncs.
 - Add typecheck scripts for Netlify functions and Convex files.
-- Add tests or script checks for `deserializeFromConvex`, `storeSnapshot`, date filtering, and cache freshness logic.
+- Add tests or script checks for the API token adapter, `storeSnapshot`, date filtering, and cache freshness logic.
 - Add an admin-only endpoint or CLI script for historical coverage reports.
 - Add token search and watchlist features only after reliability and credential work is complete.
 
@@ -315,6 +315,16 @@ Deploy and smoke-test results:
 Closeout verification reran the same passing checks after this handoff section was updated.
 
 The previous ad hoc Netlify function typecheck gap is closed by `npm run typecheck:functions`, which includes a Netlify function `process.env` declaration and the scheduled background config. Typecheck alone is not enough for scheduled functions; after each Netlify deploy, verify `function_schedules` in deploy metadata includes `scheduled-sync`.
+
+### Current Working Tree Cleanup - June 18, 2026
+
+Pre-push refactor cleanup in the current working tree:
+
+- `GET /api/graduated` now uses shared Dune metadata/full-result helpers and shared batched DexScreener enrichment instead of maintaining duplicate live provider code.
+- Token explorer links are generated through one shared helper.
+- Removed unused client-side provider modules under `src/lib/dune.ts` and `src/lib/dexscreener.ts`; provider calls remain server-side in Netlify functions.
+- Removed unused CSS utilities and the no-longer-used `Press Start 2P` font import.
+- Added focused local tests for Dune metadata status fetching and shared token-link generation.
 
 ### Next Session Handoff - Data Reliability
 
@@ -482,7 +492,7 @@ Stable architecture, operations, endpoint, deploy, health-monitor, and backfill 
 - [ ] Rotate Dune credentials and revoke the exposed key after account/key recovery
 - [ ] Fork or recreate the Dune query under a controlled account/team
 - [x] Fix live metadata/cache mismatch in the current working tree
-- [ ] Batch live DexScreener enrichment
+- [x] Batch live DexScreener enrichment
 - [x] Add typecheck coverage for Netlify and Convex code
 - [ ] Add token search by name/symbol
 - [ ] Real-time updates via Helius WebSocket

@@ -14,11 +14,9 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import SyncIcon from '@mui/icons-material/Sync';
 
 interface HeaderProps {
-  tokenCount: number;
   lastUpdated: Date | null;
   onRefresh: () => void;
   loading: boolean;
-  selectedDate: string | null;
 }
 
 export function Header({

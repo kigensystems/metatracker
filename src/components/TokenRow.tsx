@@ -38,7 +38,7 @@ function formatCreatedAt(timestamp: number | null | undefined): string {
 
 export function TokenRow({ token, index }: TokenRowProps) {
   const [imgError, setImgError] = useState(false);
-  const dexUrl = token.dexScreenerUrl || `https://dexscreener.com/solana/${token.mint}`;
+  const dexUrl = token.dexScreenerUrl || token.links.dexscreener || '#';
 
   const handleLinkClick = (e: React.MouseEvent, url: string) => {
     e.preventDefault();

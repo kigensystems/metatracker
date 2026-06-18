@@ -6,7 +6,11 @@ const retryUrl = pathToFileURL('/tmp/metatracker-health-test/retry.js').href;
 const tokenSyncUrl = pathToFileURL('/tmp/metatracker-health-test/token-sync.js').href;
 
 const { withRetries } = await import(retryUrl);
-const { validateDuneResultCompleteness } = await import(tokenSyncUrl);
+const {
+  buildTokenLinks,
+  fetchLatestDuneStatus,
+  validateDuneResultCompleteness,
+} = await import(tokenSyncUrl);
 
 function duneResult({ tokens = [{}], rowCount = tokens.length, totalRowCount = rowCount, state = 'QUERY_STATE_COMPLETED' } = {}) {
   return {
@@ -81,4 +85,44 @@ test('Dune result guard rejects malformed token rows', () => {
     () => validateDuneResultCompleteness(duneResult({ tokens: [{}], rowCount: 2, totalRowCount: 2 })),
     /usable token rows/,
   );
+});
+
+test('buildTokenLinks centralizes token explorer URLs', () => {
+  assert.deepEqual(buildTokenLinks('MintAddress'), {
+    dexscreener: 'https://dexscreener.com/solana/MintAddress',
+    birdeye: 'https://birdeye.so/token/MintAddress?chain=solana',
+    solscan: 'https://solscan.io/token/MintAddress',
+  });
+});
+
+test('fetchLatestDuneStatus uses the metadata-only Dune results endpoint', async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = '';
+  let requestedKey = '';
+
+  globalThis.fetch = async (url, init) => {
+    requestedUrl = String(url);
+    requestedKey = init?.headers?.['X-Dune-API-Key'];
+
+    return new Response(JSON.stringify({
+      execution_id: 'exec_123',
+      execution_ended_at: '2026-06-17T12:00:00.000Z',
+      state: 'QUERY_STATE_COMPLETED',
+    }), { status: 200 });
+  };
+
+  try {
+    const status = await fetchLatestDuneStatus('test-key', 'query-123');
+
+    assert.equal(requestedUrl, 'https://api.dune.com/api/v1/query/query-123/results?limit=0');
+    assert.equal(requestedKey, 'test-key');
+    assert.deepEqual(status, {
+      executionEndedAt: '2026-06-17T12:00:00.000Z',
+      state: 'QUERY_STATE_COMPLETED',
+      responseStatusCode: 200,
+      executionId: 'exec_123',
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

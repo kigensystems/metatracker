@@ -148,11 +148,9 @@ function App() {
     <div className="min-h-screen bg-void relative">
       <div className="relative z-10">
         <Header
-          tokenCount={tokens.length}
           lastUpdated={lastUpdated}
           onRefresh={() => fetchTokens(true)}
           loading={loading}
-          selectedDate={selectedDate}
         />
 
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">

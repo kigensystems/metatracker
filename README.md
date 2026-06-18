@@ -30,6 +30,8 @@ The core production flow is:
 4. It writes token snapshots and sync metadata to Convex.
 5. The frontend reads live/historical data through Netlify API endpoints.
 
+Live/manual Dune fetches and scheduled snapshot writes share the same Dune parsing, result-completeness guards, token-link generation, and batched DexScreener enrichment helpers.
+
 Only scheduled syncs should write durable snapshots and update `duneMetadata`. Browser/manual refreshes may return live data, but they must not advance durable metadata unless they also store a matching snapshot.
 
 ## Data Sources
