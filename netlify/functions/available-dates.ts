@@ -1,7 +1,6 @@
 import type { Context } from '@netlify/functions';
 import { ConvexHttpClient } from 'convex/browser';
 import { api } from '../../convex/_generated/api';
-import { buildTokenDateCounts } from './_shared/token-dates';
 
 const headers = {
   'Access-Control-Allow-Origin': '*',
@@ -26,12 +25,15 @@ export default async function handler(request: Request, _context: Context) {
     }
 
     const convex = new ConvexHttpClient(convexUrl);
-    const tokens = await convex.query(api.graduatedTokens.recentStored, { snapshotLimit: 45 });
-    const dates = buildTokenDateCounts(tokens).slice(0, 30);
+    const snapshots = await convex.query(api.dailySnapshots.list);
 
     return new Response(
       JSON.stringify({
-        dates,
+        dates: snapshots.map((s) => ({
+          date: s.date,
+          tokenCount: s.tokenCount,
+          capturedAt: s.capturedAt,
+        })),
       }),
       { status: 200, headers }
     );

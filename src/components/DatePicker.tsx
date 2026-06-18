@@ -43,7 +43,7 @@ export function DatePicker({
   const liveSnapshotDate = liveDataDate || getLocalDateKey();
 
   const historicalDates = availableDates
-    .filter(d => d.tokenCount > 0)
+    .filter(d => d.tokenCount > 0 && d.date !== liveSnapshotDate)
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 7);
 
@@ -140,9 +140,9 @@ export function DatePicker({
                       color: 'text.secondary',
                 }),
               }}
-              title={`Tokens created on ${formatDate(date)}`}
+              title={`Rolling 24h snapshot stored on ${formatDate(date)}`}
             >
-              {formatDate(date)}
+              24h to {formatDate(date)}
               <Typography
                 component="span"
                 sx={{

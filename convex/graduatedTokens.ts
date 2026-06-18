@@ -66,32 +66,6 @@ export const byMint = query({
   },
 });
 
-export const recentStored = query({
-  args: { snapshotLimit: v.optional(v.number()) },
-  handler: async (ctx, args) => {
-    const snapshotLimit = Math.min(Math.max(args.snapshotLimit ?? 45, 1), 120);
-    const snapshots = await ctx.db
-      .query("dailySnapshots")
-      .order("desc")
-      .take(snapshotLimit);
-
-    const tokens = [];
-    for (const snapshot of snapshots) {
-      const snapshotTokens = await ctx.db
-        .query("graduatedTokens")
-        .withIndex("by_date", (q) => q.eq("snapshotDate", snapshot.date))
-        .collect();
-
-      tokens.push(...snapshotTokens.map((token) => ({
-        ...token,
-        snapshotCapturedAt: snapshot.capturedAt,
-      })));
-    }
-
-    return tokens;
-  },
-});
-
 export const storeSnapshot = mutation({
   args: {
     date: v.string(),
