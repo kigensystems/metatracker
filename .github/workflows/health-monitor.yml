@@ -31,11 +31,7 @@ jobs:
           status="$(curl -sS --max-time 20 -o "$body" -w "%{http_code}" "$HEALTH_URL")"
 
           echo "status=$status" >> "$GITHUB_OUTPUT"
-          {
-            echo "body<<EOF"
-            cat "$body"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          echo "body_b64=$(base64 -w 0 "$body")" >> "$GITHUB_OUTPUT"
 
           node - "$body" "$status" <<'NODE'
           const fs = require("node:fs");
@@ -72,10 +68,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           STATUS: ${{ steps.check.outputs.status }}
-          BODY: ${{ steps.check.outputs.body }}
+          BODY_B64: ${{ steps.check.outputs.body_b64 }}
           TITLE: meta.tracker scheduled sync health failing
         run: |
           set -euo pipefail
+          body="$(printf '%s' "$BODY_B64" | base64 -d)"
 
           issue_number="$(gh issue list \
             --repo "$GH_REPO" \
@@ -94,7 +91,7 @@ jobs:
 
           Response:
           \`\`\`json
-          $BODY
+          $body
           \`\`\`
           EOF
           )"
