@@ -357,3 +357,5 @@ Low/no Dune usage operations:
 - Backfill repair is now possible, but should start with `dryRun=true`.
 - The Dune account/key remains fragile because the project history included a real-looking exposed key and the Dune account was reported banned. Do not rotate or revoke the production key until a tested replacement exists.
 - Keep `ADMIN_REFRESH_TOKEN` server-only. Never expose it to the browser.
+- After any Netlify deploy that touches functions, verify deploy metadata includes `function_schedules` for `scheduled-sync`; TypeScript passing does not prove Netlify detected the cron config.
+- DexScreener `pairCreatedAt` is pair creation metadata. Do not use it as the date-tab grouping key for this rolling Dune snapshot app.

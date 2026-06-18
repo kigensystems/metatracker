@@ -307,10 +307,14 @@ Deploy and smoke-test results:
   - Redeployed Netlify production with the new environment variables: `6a3391b4ef1cdd7676aa0069`.
   - Verified authorized `POST /api/backfill?date=2026-06-18&dryRun=true` returns `200` and `wouldSkipExisting: true` without executing Dune.
   - Verified the GitHub Actions health monitor run `27741544544` completed successfully. A false alert issue from the first workflow attempt was closed by the recovery step.
+  - Follow-up incident: the reliability hardening changed the scheduled function config export to a trailing `as Config & { type: "background" }` assertion. TypeScript passed, but Netlify's static parser stopped detecting the cron schedule, leaving `function_schedules: []` on deploy metadata. The `2026-06-18T12:00:00Z` slot did not fire, `/api/health` returned `503`, and GitHub issue `#2` opened.
+  - Fixed by changing the export to `export const config: Config & { type: "background" } = { ... }` in commit `d943393`. Verified the production deploy `6a342f6bb8a0ec6ad196fc0b` had `function_schedules: [{ name: "scheduled-sync", cron: "0 0,12 * * *" }]`.
+  - Manually invoked `scheduled-sync` once after that fix to repair the missed `12:00 UTC` slot. It stored 33 tokens for `2026-06-18`, Dune execution `01KVDSJXCMV1GARM6AA272ZA91`, `retryCount: 0`, 100% enrichment. `/api/health` returned `200` afterward with `missingDueSlots: 0`.
+  - Follow-up UX/data correction: commit `d26b2b6` grouped historical tabs by DexScreener `pairCreatedAt`, which made the June 18 tab show only 3 tokens. That was incorrect because `pairCreatedAt` is pair creation metadata, not the Dune graduated-token rolling window. Reverted that behavior in commit `e20ce7f`; date tabs are rolling snapshot windows again, and the live June 18 snapshot showed 33 tokens after deploy `6a3430dc952929650875ee74`.
 
 Closeout verification reran the same passing checks after this handoff section was updated.
 
-The previous ad hoc Netlify function typecheck gap is closed by `npm run typecheck:functions`, which includes a Netlify function `process.env` declaration and the scheduled background config cast.
+The previous ad hoc Netlify function typecheck gap is closed by `npm run typecheck:functions`, which includes a Netlify function `process.env` declaration and the scheduled background config. Typecheck alone is not enough for scheduled functions; after each Netlify deploy, verify `function_schedules` in deploy metadata includes `scheduled-sync`.
 
 ### Next Session Handoff - Data Reliability
 
@@ -325,6 +329,14 @@ Finish the remaining rollout items before adding new product features:
 7. Source metadata: deployed and visible in `/api/health` on `latestRun` and `latestSnapshot`.
 
 The main reliability gap is recoverability, not API credits. Monitoring tells us a gap exists; backfill is what prevents that gap from becoming permanent.
+
+Current handoff notes:
+
+- Last checked after manual recovery, production health was green after the missed `2026-06-18T12:00:00Z` slot.
+- Latest important deploys: `6a342f6bb8a0ec6ad196fc0b` restored Netlify schedule registration; `6a3430dc952929650875ee74` restored history tabs to rolling snapshot windows.
+- Do not group history tabs by DexScreener `pairCreatedAt`. It is useful row/profile metadata only.
+- Date tabs represent rolling Dune snapshot windows, not exact token-created calendar days.
+- For every Netlify deploy that touches functions, verify deploy metadata contains `function_schedules: [{ name: "scheduled-sync", cron: "0 0,12 * * *" }]`.
 
 ## Stable Project Documentation
 
