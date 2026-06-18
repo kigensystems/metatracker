@@ -302,6 +302,9 @@ Deploy and smoke-test results:
   - Set `ADMIN_REFRESH_TOKEN` in Netlify production.
   - Created public Dune backfill query `7746626` after private-query creation hit Dune's private-query quota.
   - Set `DUNE_BACKFILL_QUERY_ID=7746626` in Netlify production.
+  - Redeployed Netlify production with the new environment variables: `6a3391b4ef1cdd7676aa0069`.
+  - Verified authorized `POST /api/backfill?date=2026-06-18&dryRun=true` returns `200` and `wouldSkipExisting: true` without executing Dune.
+  - Verified the GitHub Actions health monitor run `27741544544` completed successfully. A false alert issue from the first workflow attempt was closed by the recovery step.
 
 Closeout verification reran the same passing checks after this handoff section was updated.
 
