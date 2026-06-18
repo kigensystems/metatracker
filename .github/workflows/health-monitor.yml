@@ -3,6 +3,11 @@ name: Health Monitor
 on:
   schedule:
     - cron: "*/10 * * * *"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/health-monitor.yml"
   workflow_dispatch:
 
 permissions:
