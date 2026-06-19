@@ -14,6 +14,7 @@ interface TokenListProps {
   page: number;
   totalPages: number;
   onPageChange: (page: number) => void;
+  onTokenSelect: (token: GraduatedToken) => void;
 }
 
 export function TokenList({
@@ -24,6 +25,7 @@ export function TokenList({
   page,
   totalPages,
   onPageChange,
+  onTokenSelect,
 }: TokenListProps) {
   const toggleSort = () => {
     onSortChange(sortOrder === 'desc' ? 'asc' : 'desc');
@@ -85,7 +87,7 @@ export function TokenList({
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: '48px 48px 1fr 110px 90px',
+            gridTemplateColumns: '48px 48px 1fr 110px 112px',
             gap: 2,
             px: 2.5,
             py: 1.5,
@@ -131,7 +133,12 @@ export function TokenList({
         {/* Table body */}
         <Box>
           {tokens.map((token, index) => (
-            <TokenRow key={token.mint} token={token} index={startIndex + index - 1} />
+            <TokenRow
+              key={token.mint}
+              token={token}
+              index={startIndex + index - 1}
+              onSelect={onTokenSelect}
+            />
           ))}
         </Box>
       </Paper>

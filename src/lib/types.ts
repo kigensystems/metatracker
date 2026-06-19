@@ -86,6 +86,23 @@ export interface GraduatedToken {
   };
 }
 
+export interface DataFreshness {
+  source: string | null;
+  snapshotDate: string | null;
+  fetchedAt: string | null;
+  capturedAt: number | null;
+  duneExecutionEndedAt: string | null;
+  latestDuneExecutionEndedAt: string | null;
+  isStale: boolean;
+  staleReason: string | null;
+  dateMode: string | null;
+  totalCount: number | null;
+  enrichment: {
+    failedCount: number;
+    successRate: number;
+  } | null;
+}
+
 export interface FilterOptions {
   sortOrder: 'asc' | 'desc';
 }

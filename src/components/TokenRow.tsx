@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Box, Typography, IconButton, Avatar } from '@mui/material';
 import LanguageIcon from '@mui/icons-material/Language';
+import TelegramIcon from '@mui/icons-material/Telegram';
 import type { GraduatedToken } from '../lib/types';
 
 function XIcon() {
@@ -14,6 +15,7 @@ function XIcon() {
 interface TokenRowProps {
   token: GraduatedToken;
   index: number;
+  onSelect: (token: GraduatedToken) => void;
 }
 
 function formatNumber(num: number | null | undefined): string {
@@ -36,9 +38,8 @@ function formatCreatedAt(timestamp: number | null | undefined): string {
   });
 }
 
-export function TokenRow({ token, index }: TokenRowProps) {
+export function TokenRow({ token, index, onSelect }: TokenRowProps) {
   const [imgError, setImgError] = useState(false);
-  const dexUrl = token.dexScreenerUrl || token.links.dexscreener || '#';
 
   const handleLinkClick = (e: React.MouseEvent, url: string) => {
     e.preventDefault();
@@ -46,22 +47,25 @@ export function TokenRow({ token, index }: TokenRowProps) {
     window.open(url, '_blank');
   };
 
-  const hasSocials = token.website || token.twitter;
+  const hasSocials = token.website || token.twitter || token.telegram;
 
   return (
     <Box
-      component="a"
-      href={dexUrl}
-      target="_blank"
-      rel="noopener noreferrer"
+      component="button"
+      type="button"
+      onClick={() => onSelect(token)}
       sx={{
         display: 'grid',
-        gridTemplateColumns: '48px 48px 1fr 110px 90px',
+        gridTemplateColumns: '48px 48px 1fr 110px 112px',
         gap: 2,
         px: 2.5,
         py: 2,
         alignItems: 'center',
-        textDecoration: 'none',
+        width: '100%',
+        border: 0,
+        backgroundColor: 'transparent',
+        textAlign: 'left',
+        cursor: 'pointer',
         color: 'inherit',
         borderBottom: 1,
         borderColor: 'divider',
@@ -177,6 +181,18 @@ export function TokenRow({ token, index }: TokenRowProps) {
                 }}
               >
                 <XIcon />
+              </IconButton>
+            )}
+            {token.telegram && (
+              <IconButton
+                size="small"
+                onClick={(e) => handleLinkClick(e, token.telegram!)}
+                sx={{
+                  color: 'text.secondary',
+                  '&:hover': { color: 'text.primary', backgroundColor: 'action.hover' },
+                }}
+              >
+                <TelegramIcon sx={{ fontSize: 18 }} />
               </IconButton>
             )}
           </>

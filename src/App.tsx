@@ -2,9 +2,11 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Header } from './components/Header';
 import { DatePicker } from './components/DatePicker';
 import { TokenList } from './components/TokenList';
+import { FreshnessBar } from './components/FreshnessBar';
+import { TokenDetailDrawer } from './components/TokenDetailDrawer';
 import { LoadingScreen } from './components/LoadingScreen';
 import { EmptyState } from './components/EmptyState';
-import type { GraduatedToken } from './lib/types';
+import type { DataFreshness, GraduatedToken } from './lib/types';
 
 const API_BASE = import.meta.env.DEV ? '/.netlify/functions' : '/api';
 
@@ -17,9 +19,49 @@ interface AvailableDate {
 interface CachedData {
   tokens: GraduatedToken[];
   lastUpdated: Date;
+  freshness: DataFreshness;
 }
 
 const ITEMS_PER_PAGE = 50;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function numberOrNull(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function buildFreshness(data: Record<string, unknown>, totalCount: number): DataFreshness {
+  const enrichmentData = isRecord(data.enrichment) ? data.enrichment : null;
+  const enrichment = enrichmentData
+    ? {
+        failedCount: numberOrNull(enrichmentData.failedCount) ?? 0,
+        successRate: numberOrNull(enrichmentData.successRate) ?? 0,
+      }
+    : null;
+
+  const source = stringOrNull(data.source);
+  const isStale = Boolean(data.isStale) || source === 'cache-stale';
+
+  return {
+    source,
+    snapshotDate: stringOrNull(data.snapshotDate),
+    fetchedAt: stringOrNull(data.fetchedAt),
+    capturedAt: numberOrNull(data.capturedAt),
+    duneExecutionEndedAt: stringOrNull(data.duneExecutionEndedAt),
+    latestDuneExecutionEndedAt: stringOrNull(data.latestDuneExecutionEndedAt),
+    isStale,
+    staleReason: stringOrNull(data.staleReason),
+    dateMode: stringOrNull(data.dateMode),
+    totalCount: numberOrNull(data.totalCount) ?? totalCount,
+    enrichment,
+  };
+}
 
 function App() {
   const [tokens, setTokens] = useState<GraduatedToken[]>([]);
@@ -32,6 +74,8 @@ function App() {
   const [liveDataDate, setLiveDataDate] = useState<string | null>(null);
   const [liveTokenCount, setLiveTokenCount] = useState<number | null>(null);
   const [page, setPage] = useState(1);
+  const [freshness, setFreshness] = useState<DataFreshness | null>(null);
+  const [selectedToken, setSelectedToken] = useState<GraduatedToken | null>(null);
 
   // Client-side cache for fetched data
   const cache = useRef<Map<string, CachedData>>(new Map());
@@ -58,6 +102,7 @@ function App() {
       const cached = cache.current.get(cacheKey);
       if (cached) {
         setTokens(cached.tokens);
+        setFreshness(cached.freshness);
         if (cacheKey === 'live') {
           setLiveTokenCount(cached.tokens.length);
         }
@@ -90,12 +135,18 @@ function App() {
 
       const fetchedTokens = data.tokens || [];
       const updatedAt = new Date(data.fetchedAt || data.capturedAt || Date.now());
+      const nextFreshness = buildFreshness(data, fetchedTokens.length);
 
       setTokens(fetchedTokens);
       setLastUpdated(updatedAt);
+      setFreshness(nextFreshness);
 
       // Store in cache
-      cache.current.set(cacheKey, { tokens: fetchedTokens, lastUpdated: updatedAt });
+      cache.current.set(cacheKey, {
+        tokens: fetchedTokens,
+        lastUpdated: updatedAt,
+        freshness: nextFreshness,
+      });
 
       // Capture live metadata for the rolling 24h tab.
       if (mode === 'live' && data.snapshotDate) {
@@ -129,6 +180,7 @@ function App() {
   const handleDateChange = useCallback((date: string | null) => {
     setSelectedDate(date);
     setPage(1); // Reset to first page on date change
+    setSelectedToken(null);
   }, []);
 
   // Sort tokens by market cap
@@ -165,6 +217,8 @@ function App() {
             />
           </div>
 
+          <FreshnessBar freshness={error ? null : freshness} />
+
           {loading ? (
             <LoadingScreen />
           ) : error ? (
@@ -187,10 +241,16 @@ function App() {
               page={page}
               totalPages={totalPages}
               onPageChange={setPage}
+              onTokenSelect={setSelectedToken}
             />
           )}
         </main>
       </div>
+      <TokenDetailDrawer
+        token={selectedToken}
+        open={selectedToken !== null}
+        onClose={() => setSelectedToken(null)}
+      />
     </div>
   );
 }
