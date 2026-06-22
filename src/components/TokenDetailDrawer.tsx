@@ -18,6 +18,8 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import LanguageIcon from '@mui/icons-material/Language';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import type { GraduatedToken } from '../lib/types';
+import { changeColor, formatAge, formatCompact, formatPercent, formatUsd } from '../lib/format';
+import { XIcon } from './icons';
 
 interface TokenDetailDrawerProps {
   token: GraduatedToken | null;
@@ -28,7 +30,7 @@ interface TokenDetailDrawerProps {
 interface StatItem {
   label: string;
   value: string;
-  tone?: 'positive' | 'negative' | 'neutral';
+  color?: string;
 }
 
 interface ExternalLink {
@@ -37,37 +39,8 @@ interface ExternalLink {
   icon: ReactNode;
 }
 
-function XIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-    </svg>
-  );
-}
-
-function formatCurrency(value: number | null | undefined): string {
-  if (value === null || value === undefined) return '-';
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
-  return `$${value.toFixed(value >= 1 ? 2 : 6)}`;
-}
-
-function formatCompactNumber(value: number | null | undefined): string {
-  if (value === null || value === undefined) return '-';
-  return new Intl.NumberFormat('en-US', {
-    notation: value >= 100_000 ? 'compact' : 'standard',
-    maximumFractionDigits: value >= 100_000 ? 1 : 0,
-  }).format(value);
-}
-
-function formatPercent(value: number | null | undefined): string {
-  if (value === null || value === undefined) return '-';
-  const sign = value > 0 ? '+' : '';
-  return `${sign}${value.toFixed(1)}%`;
-}
-
 function formatDateTime(timestamp: number | null | undefined): string {
-  if (!timestamp) return '-';
+  if (!timestamp) return '—';
   return new Date(timestamp).toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -75,18 +48,6 @@ function formatDateTime(timestamp: number | null | undefined): string {
     minute: '2-digit',
     hour12: true,
   });
-}
-
-function formatAge(timestamp: number | null | undefined): string {
-  if (!timestamp) return '-';
-  const diffMs = Date.now() - timestamp;
-  const mins = Math.max(0, Math.floor(diffMs / 60000));
-  const hours = Math.floor(mins / 60);
-  const days = Math.floor(hours / 24);
-
-  if (mins < 60) return `${mins}m`;
-  if (hours < 24) return `${hours}h`;
-  return `${days}d`;
 }
 
 function shortMint(mint: string): string {
@@ -103,20 +64,12 @@ export function TokenDetailDrawer({ token, open, onClose }: TokenDetailDrawerPro
     if (!token) return [];
 
     return [
-      { label: 'Market Cap', value: formatCurrency(token.marketCap) },
-      { label: 'Liquidity', value: formatCurrency(token.liquidity) },
-      { label: '24h Volume', value: formatCurrency(token.volume24h) },
-      {
-        label: '24h Change',
-        value: formatPercent(token.priceChange24h),
-        tone: token.priceChange24h === null || token.priceChange24h === undefined
-          ? 'neutral'
-          : token.priceChange24h >= 0
-            ? 'positive'
-            : 'negative',
-      },
-      { label: 'VWAP Price', value: formatCurrency(token.priceUsd) },
-      { label: 'Trades', value: formatCompactNumber(token.tradeCount) },
+      { label: '24h Volume', value: formatUsd(token.volume24h) },
+      { label: 'Market Cap', value: formatUsd(token.marketCap) },
+      { label: '24h Change', value: formatPercent(token.priceChange24h), color: changeColor(token.priceChange24h) },
+      { label: 'Liquidity', value: formatUsd(token.liquidity) },
+      { label: 'VWAP Price', value: formatUsd(token.priceUsd) },
+      { label: 'Trades', value: formatCompact(token.tradeCount) },
       { label: 'Age', value: formatAge(token.createdAt) },
       { label: 'Created', value: formatDateTime(token.createdAt) },
     ];
@@ -189,6 +142,29 @@ export function TokenDetailDrawer({ token, open, onClose }: TokenDetailDrawerPro
           </Box>
 
           <Box sx={{ p: 2.5, overflowY: 'auto' }}>
+            {token.bannerImage && (
+              <Box
+                component="img"
+                key={token.bannerImage}
+                src={token.bannerImage}
+                alt=""
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = 'none';
+                }}
+                sx={{
+                  display: 'block',
+                  width: 'calc(100% + 40px)',
+                  mx: -2.5,
+                  mt: -2.5,
+                  mb: 2.5,
+                  height: 116,
+                  objectFit: 'cover',
+                  borderBottom: 1,
+                  borderColor: 'divider',
+                }}
+              />
+            )}
+
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2.5 }}>
               <Avatar
                 src={token.image || undefined}
@@ -278,11 +254,7 @@ export function TokenDetailDrawer({ token, open, onClose }: TokenDetailDrawerPro
               {stats.map((stat, index) => {
                 const isRightColumn = index % 2 === 1;
                 const isLastRow = index >= stats.length - 2;
-                const color = stat.tone === 'positive'
-                  ? 'primary.main'
-                  : stat.tone === 'negative'
-                    ? 'error.main'
-                    : 'text.primary';
+                const color = stat.color ?? 'text.primary';
 
                 return (
                   <Box

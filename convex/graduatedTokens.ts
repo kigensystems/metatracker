@@ -7,6 +7,7 @@ const tokenValidator = v.object({
   symbol: v.string(),
   name: v.string(),
   image: v.optional(v.string()),
+  bannerImage: v.optional(v.string()),
   marketCap: v.optional(v.number()),
   liquidity: v.optional(v.number()),
   volume24h: v.optional(v.number()),

@@ -1,15 +1,22 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Box, Typography, IconButton, Avatar } from '@mui/material';
 import LanguageIcon from '@mui/icons-material/Language';
 import type { GraduatedToken } from '../lib/types';
+import { changeColor, formatAge, formatPercent, formatUsd } from '../lib/format';
+import { XIcon } from './icons';
 
-function XIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-    </svg>
-  );
-}
+// Shared column template so the header and every row stay aligned.
+// Columns: rank · token · 24h volume · market cap · 24h % · links
+// On xs the last two (24h % and links) are hidden, leaving four tracks.
+export const ROW_GRID = {
+  display: 'grid',
+  gridTemplateColumns: {
+    xs: '32px minmax(0, 1fr) 84px 84px',
+    sm: '40px minmax(0, 1fr) 110px 110px 92px 100px',
+  },
+  columnGap: { xs: 1, sm: 2 },
+  alignItems: 'center',
+} as const;
 
 interface TokenRowProps {
   token: GraduatedToken;
@@ -17,27 +24,7 @@ interface TokenRowProps {
   onSelect: (token: GraduatedToken) => void;
 }
 
-function formatNumber(num: number | null | undefined): string {
-  if (num === null || num === undefined) return '-';
-  if (num >= 1_000_000) return `$${(num / 1_000_000).toFixed(2)}M`;
-  if (num >= 1_000) return `$${(num / 1_000).toFixed(1)}K`;
-  return `$${num.toFixed(2)}`;
-}
-
-function formatCreatedAt(timestamp: number | null | undefined): string {
-  if (!timestamp) return '';
-  const date = new Date(timestamp);
-  return date.toLocaleString('en-US', {
-    timeZone: 'America/Los_Angeles',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
-}
-
-export function TokenRow({ token, index, onSelect }: TokenRowProps) {
+export const TokenRow = memo(function TokenRow({ token, index, onSelect }: TokenRowProps) {
   const [imgError, setImgError] = useState(false);
 
   const handleLinkClick = (e: React.MouseEvent, url: string) => {
@@ -53,6 +40,7 @@ export function TokenRow({ token, index, onSelect }: TokenRowProps) {
     }
   };
 
+  const change = token.priceChange24h;
   const hasSocials = token.website || token.twitter;
 
   return (
@@ -63,118 +51,129 @@ export function TokenRow({ token, index, onSelect }: TokenRowProps) {
       onClick={() => onSelect(token)}
       onKeyDown={handleKeyDown}
       sx={{
-        display: 'grid',
-        gridTemplateColumns: '48px 48px 1fr 110px 112px',
-        gap: 2,
+        ...ROW_GRID,
         px: 2.5,
-        py: 2,
-        alignItems: 'center',
+        py: 1.5,
         width: '100%',
-        border: 0,
-        backgroundColor: 'transparent',
         textAlign: 'left',
         cursor: 'pointer',
         color: 'inherit',
         borderBottom: 1,
         borderColor: 'divider',
         transition: 'background-color 0.15s',
-        '&:hover': {
-          backgroundColor: 'action.hover',
-        },
-        '&:last-child': {
-          borderBottom: 0,
-        },
+        '&:hover': { backgroundColor: 'action.hover' },
+        '&:last-child': { borderBottom: 0 },
       }}
     >
-      {/* Row Number */}
-      <Typography
-        variant="body2"
-        sx={{ color: 'text.secondary', fontFamily: 'monospace', fontWeight: 500 }}
-      >
+      {/* Row number */}
+      <Typography variant="body2" sx={{ color: 'text.secondary', fontFamily: 'monospace', fontWeight: 500 }}>
         {index + 1}
       </Typography>
 
-      {/* Token Image */}
-      {token.image && !imgError ? (
-        <Avatar
-          src={token.image}
-          alt={token.symbol}
-          variant="rounded"
-          onError={() => setImgError(true)}
-          sx={{ width: 40, height: 40, border: 1, borderColor: 'divider' }}
-        />
-      ) : (
-        <Avatar
-          variant="rounded"
-          sx={{
-            width: 40,
-            height: 40,
-            bgcolor: 'action.hover',
-            border: 1,
-            borderColor: 'divider',
-            fontSize: '0.75rem',
-            fontWeight: 600,
-            color: 'text.secondary',
-          }}
-        >
-          {token.symbol?.slice(0, 2) || '??'}
-        </Avatar>
-      )}
-
-      {/* Token Name/Symbol */}
-      <Box sx={{ minWidth: 0 }}>
-        <Typography
-          variant="body2"
-          sx={{
-            fontWeight: 500,
-            color: 'text.primary',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {token.name || 'Unknown'}
-        </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.25 }}>
-          <Typography
-            variant="caption"
-            sx={{ color: 'warning.main', fontFamily: 'monospace', fontWeight: 500 }}
+      {/* Token: avatar + name/symbol/age */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
+        {token.image && !imgError ? (
+          <Avatar
+            src={token.image}
+            alt={token.symbol}
+            variant="rounded"
+            onError={() => setImgError(true)}
+            sx={{ width: 36, height: 36, flexShrink: 0, border: 1, borderColor: 'divider' }}
+          />
+        ) : (
+          <Avatar
+            variant="rounded"
+            sx={{
+              width: 36,
+              height: 36,
+              flexShrink: 0,
+              bgcolor: 'action.hover',
+              border: 1,
+              borderColor: 'divider',
+              fontSize: '0.7rem',
+              fontWeight: 600,
+              color: 'text.secondary',
+            }}
           >
-            ${token.symbol}
+            {token.symbol?.slice(0, 2) || '??'}
+          </Avatar>
+        )}
+        <Box sx={{ minWidth: 0 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight: 500,
+              color: 'text.primary',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {token.name || 'Unknown'}
           </Typography>
-          {token.createdAt && (
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-              {formatCreatedAt(token.createdAt)}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.125, minWidth: 0 }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'warning.main',
+                fontFamily: 'monospace',
+                fontWeight: 500,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              ${token.symbol}
             </Typography>
-          )}
+            {token.createdAt && (
+              <Typography variant="caption" sx={{ color: 'text.secondary', flexShrink: 0 }}>
+                · {formatAge(token.createdAt)}
+              </Typography>
+            )}
+          </Box>
         </Box>
       </Box>
 
-      {/* Market Cap */}
+      {/* 24h volume — the headline metric */}
+      <Typography
+        variant="body2"
+        sx={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: 'text.primary' }}
+      >
+        {formatUsd(token.volume24h)}
+      </Typography>
+
+      {/* Market cap */}
+      <Typography
+        variant="body2"
+        sx={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 500, color: 'text.primary' }}
+      >
+        {formatUsd(token.marketCap)}
+      </Typography>
+
+      {/* 24h change */}
       <Typography
         variant="body2"
         sx={{
+          display: { xs: 'none', sm: 'block' },
           textAlign: 'right',
           fontFamily: 'monospace',
           fontWeight: 600,
-          color: 'primary.main',
+          color: changeColor(change),
         }}
       >
-        {formatNumber(token.marketCap)}
+        {formatPercent(change)}
       </Typography>
 
       {/* Socials */}
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
+      <Box sx={{ display: { xs: 'none', sm: 'flex' }, justifyContent: 'flex-end', gap: 0.5 }}>
         {hasSocials ? (
           <>
             {token.website && (
               <IconButton
                 size="small"
                 onClick={(e) => handleLinkClick(e, token.website!)}
-                sx={{
-                  color: 'text.secondary',
-                  '&:hover': { color: 'text.primary', backgroundColor: 'action.hover' },
-                }}
+                aria-label="Website"
+                sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary', backgroundColor: 'action.hover' } }}
               >
                 <LanguageIcon sx={{ fontSize: 18 }} />
               </IconButton>
@@ -183,12 +182,10 @@ export function TokenRow({ token, index, onSelect }: TokenRowProps) {
               <IconButton
                 size="small"
                 onClick={(e) => handleLinkClick(e, token.twitter!)}
-                sx={{
-                  color: 'text.secondary',
-                  '&:hover': { color: 'text.primary', backgroundColor: 'action.hover' },
-                }}
+                aria-label="X"
+                sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary', backgroundColor: 'action.hover' } }}
               >
-                <XIcon />
+                <XIcon size={16} />
               </IconButton>
             )}
           </>
@@ -200,4 +197,4 @@ export function TokenRow({ token, index, onSelect }: TokenRowProps) {
       </Box>
     </Box>
   );
-}
+});

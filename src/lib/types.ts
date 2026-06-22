@@ -6,6 +6,7 @@ export interface GraduatedToken {
   name: string;
   symbol: string;
   image: string | null;
+  bannerImage: string | null;
 
   // DexScreener market data
   priceUsd: number | null;
@@ -29,6 +30,8 @@ export interface GraduatedToken {
     solscan: string;
   };
 }
+
+export type SortKey = 'volume24h' | 'marketCap' | 'priceChange24h';
 
 export interface DataFreshness {
   source: string | null;

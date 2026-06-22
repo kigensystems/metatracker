@@ -6,6 +6,47 @@ operations docs see [README.md](../README.md).
 
 ---
 
+## 2026-06-22 — Volume-first redesign, 2h sync, recency-based health
+
+Goal: make the dashboard a fast personal "quick lookup" for the current
+volume/meta. Working tree (not yet committed/deployed at time of writing):
+
+- **UI**: added a "current meta" summary strip (top volume / top gainer / top
+  market cap / total 24h volume) above a denser, **sortable** token table.
+  24h volume + market cap + color-coded 24h % are now inline; default sort is
+  volume. Liquidity / trades / VWAP stay in the detail drawer.
+  (`MetaSummary.tsx`, `TokenList.tsx`, `TokenRow.tsx`, shared `src/lib/format.ts`
+  + `src/components/icons.tsx`; `ROW_GRID` lives in `TokenRow.tsx`.)
+- **Drawer**: shows the free DexScreener banner image at top; stats reordered
+  volume-first. Descriptions were investigated and dropped — not available free
+  per token (DexScreener token endpoint has none; its profiles feed had 0/47
+  overlap with our tokens; pump.fun is Cloudflare-blocked). Banner
+  (`info.header`, ~72% coverage) is the free "what is it" signal instead.
+- **Data**: capture `bannerImage` (`header || openGraph`) end-to-end
+  (`token-sync.ts` → `convex/schema.ts` + `graduatedTokens.ts` validator →
+  `graduated.ts` → `types.ts` → drawer). Optional field; appears after the first
+  post-deploy sync.
+- **Freshness**: scheduled-sync moved 12h → **every 2h** (`0 */2 * * *`). Dune
+  reads are ~0.24 credits each (free tier: 1 credit = 1,000 datapoints; query
+  returns ~235), so ~360 reads/mo ≈ ~14% of the 2,500 monthly credits. That Dune
+  query re-executes every ~1–3h, so reading more often captures fresher data
+  without paying to execute.
+- **Health**: replaced the per-slot audit with a **recency check** (OK if a sync
+  succeeded within ~4.5h = 2 intervals + grace) in `sync-health.ts` / `health.ts`.
+  Cadence-agnostic; no false alarms on the cadence change. `/api/health` now
+  returns `syncAgeMinutes` / `staleAfterMinutes` / `latestSuccess` instead of
+  `missingDueSlots`; the monitor workflow log was updated to match.
+- **Verified**: `npm run build`, `typecheck:functions`, `tsc -p convex`,
+  `test:health` (13/13), and a Chrome pass against production data (summary,
+  sortable columns, drawer, banner layout, 2h countdown).
+- **Deploy reminders**: after deploy, confirm `function_schedules` shows
+  `cron: "0 */2 * * *"`. Two known follow-ups: `convex/syncRuns.ts` `bySlots` is
+  now dead (needs `convex codegen` to remove); `backfill.ts` still uses a 0|12
+  slot vocabulary + 12h/24h windows (works for daily reconstruction, but no
+  longer mirrors the 2h cadence).
+
+---
+
 ## 2026-06-22 — Token detail drawer + freshness UI shipped
 
 - Merged the `codex/token-detail-freshness-ui` feature into `main`: token detail

@@ -11,7 +11,7 @@ returns the token list; Netlify Functions enrich it via DexScreener and store
 durable snapshots in Convex; a React/Vite + MUI frontend reads it through
 `/api/*`.
 
-Data flow: `Dune query 4124453 → Netlify scheduled-sync (00:00 & 12:00 UTC) →
+Data flow: `Dune query 4124453 → Netlify scheduled-sync (every 2h, UTC) →
 DexScreener enrichment → Convex snapshots + audit → React (/api/*)`.
 
 ## Stack
@@ -30,7 +30,7 @@ src/
   lib/                    types.ts (shared types), theme.ts (MUI theme)
 netlify/functions/
   graduated.ts            Main data API (live / historical / check-freshness)
-  scheduled-sync.ts       00:00 & 12:00 UTC cron writer (background function)
+  scheduled-sync.ts       Every-2h cron writer (background function)
   health.ts               Convex-backed health endpoint (no Dune call)
   backfill.ts             Admin-only historical repair (POST)
   available-dates.ts      Snapshot date list for the date picker
@@ -46,6 +46,7 @@ convex/
 
 ```
 npx netlify dev              # local dev at http://localhost:8888 (needs .env.local)
+npm run dev                  # vite only; VITE_API_BASE=<prod>/api drives UI off prod data
 npm run build                # tsc + vite (frontend typecheck + bundle)
 npm run typecheck:functions  # typecheck Netlify functions
 npm run test:health          # reliability / sync-health unit tests
@@ -64,12 +65,14 @@ npx tsc --noEmit -p convex/tsconfig.json   # typecheck Convex
   manual fetches may return fresh data but must not advance `duneMetadata`
   unless a matching snapshot is stored.
 - **After any Netlify deploy that touches functions, verify** deploy metadata
-  has `function_schedules: [{ name: "scheduled-sync", cron: "0 0,12 * * *" }]`.
+  has `function_schedules: [{ name: "scheduled-sync", cron: "0 */2 * * *" }]`.
   TypeScript passing does not prove the cron registered.
 - **Date tabs = rolling snapshot windows**, not DexScreener `pairCreatedAt`
   buckets. Don't group history by `pairCreatedAt`.
-- **Health source is `syncRuns` + `/api/health`**, not snapshot presence (two
-  cron slots per day, one snapshot row per day).
+- **Health source is `syncRuns` + `/api/health`**, not snapshot presence.
+  Health is recency-based: OK when a sync succeeded within ~4.5h (two 2h
+  intervals + grace), so it never false-alarms on historical slots after a
+  cadence change. Today's data is still one snapshot row, overwritten each run.
 - **`force=true` and `POST /api/backfill` are admin-only** (`ADMIN_REFRESH_TOKEN`);
   start backfills with `dryRun=true`.
 

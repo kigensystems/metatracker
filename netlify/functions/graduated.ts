@@ -23,6 +23,7 @@ interface TokenLike {
   name?: unknown;
   symbol?: unknown;
   image?: unknown;
+  bannerImage?: unknown;
   priceUsd?: unknown;
   volume24h?: unknown;
   liquidity?: unknown;
@@ -86,6 +87,7 @@ function toApiToken(stored: TokenLike) {
     name: stringValue(stored.name, 'Unknown'),
     symbol: stringValue(stored.symbol, '???'),
     image: stringOrNull(stored.image),
+    bannerImage: stringOrNull(stored.bannerImage),
     priceUsd: numberOrNull(stored.priceUsd),
     volume24h: numberOrNull(stored.volume24h),
     liquidity: numberOrNull(stored.liquidity),

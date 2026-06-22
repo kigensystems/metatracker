@@ -2,9 +2,9 @@ import type { Context } from '@netlify/functions';
 import { ConvexHttpClient } from 'convex/browser';
 import { api } from '../../convex/_generated/api';
 import {
-  buildExpectedSlotStatuses,
-  getMissingDueSlots,
-  getRecentExpectedSlots,
+  SYNC_STALE_AFTER_MS,
+  getLatestSuccessfulRun,
+  getSyncAgeMs,
   isHealthOk,
 } from './_shared/sync-health';
 
@@ -30,31 +30,28 @@ export default async function handler(request: Request, _context: Context) {
 
   try {
     const now = new Date();
-    const expectedSlots = getRecentExpectedSlots(now, 4);
     const convex = new ConvexHttpClient(convexUrl);
 
-    const [slotRuns, recentRuns, oldestRun, snapshots] = await Promise.all([
-      convex.query(api.syncRuns.bySlots, { slots: expectedSlots.map(({ slot }) => slot) }),
-      convex.query(api.syncRuns.latest, { limit: 10 }),
+    const [recentRuns, oldestRun, snapshots] = await Promise.all([
+      convex.query(api.syncRuns.latest, { limit: 50 }),
       convex.query(api.syncRuns.oldest),
       convex.query(api.dailySnapshots.list),
     ]);
 
-    const expected = buildExpectedSlotStatuses(expectedSlots, slotRuns, oldestRun);
-    const missingDueSlots = getMissingDueSlots(expected);
-    const ok = isHealthOk(oldestRun, missingDueSlots);
-    const latestSnapshot = snapshots[0] || null;
+    const latestSuccess = getLatestSuccessfulRun(recentRuns);
+    const ageMs = getSyncAgeMs(latestSuccess, now.getTime());
+    const ok = isHealthOk(latestSuccess, now.getTime());
 
     return new Response(
       JSON.stringify({
         ok,
         checkedAt: now.toISOString(),
         monitoringStartedAt: oldestRun ? new Date(oldestRun.startedAt).toISOString() : null,
-        latestSnapshot,
+        latestSnapshot: snapshots[0] || null,
         latestRun: recentRuns[0] || null,
-        oldestRun,
-        expectedSlots: expected,
-        missingDueSlots,
+        latestSuccess,
+        syncAgeMinutes: ageMs === null ? null : Math.round(ageMs / 60000),
+        staleAfterMinutes: Math.round(SYNC_STALE_AFTER_MS / 60000),
       }),
       { status: ok ? 200 : 503, headers },
     );

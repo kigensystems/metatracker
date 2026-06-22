@@ -1,14 +1,16 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Header } from './components/Header';
 import { DatePicker } from './components/DatePicker';
+import { MetaSummary } from './components/MetaSummary';
 import { TokenList } from './components/TokenList';
 import { FreshnessBar } from './components/FreshnessBar';
 import { TokenDetailDrawer } from './components/TokenDetailDrawer';
 import { LoadingScreen } from './components/LoadingScreen';
 import { EmptyState } from './components/EmptyState';
-import type { DataFreshness, GraduatedToken } from './lib/types';
+import type { DataFreshness, GraduatedToken, SortKey } from './lib/types';
 
-const API_BASE = import.meta.env.DEV ? '/.netlify/functions' : '/api';
+const API_BASE =
+  import.meta.env.VITE_API_BASE ?? (import.meta.env.DEV ? '/.netlify/functions' : '/api');
 
 interface AvailableDate {
   date: string;
@@ -65,7 +67,8 @@ function buildFreshness(data: Record<string, unknown>, totalCount: number): Data
 
 function App() {
   const [tokens, setTokens] = useState<GraduatedToken[]>([]);
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [sortKey, setSortKey] = useState<SortKey>('volume24h');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -183,11 +186,50 @@ function App() {
     setSelectedToken(null);
   }, []);
 
-  // Sort tokens by market cap
-  const sortedTokens = [...tokens].sort((a, b) => {
-    const comparison = (b.marketCap || 0) - (a.marketCap || 0);
-    return sortOrder === 'asc' ? -comparison : comparison;
-  });
+  // Sort by the active metric, pushing tokens missing that metric to the bottom.
+  const sortedTokens = useMemo(() => {
+    const arr = [...tokens];
+    arr.sort((a, b) => {
+      const av = a[sortKey];
+      const bv = b[sortKey];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      return sortDir === 'desc' ? bv - av : av - bv;
+    });
+    return arr;
+  }, [tokens, sortKey, sortDir]);
+
+  // "Current meta" highlights, computed across the full set (not just the page).
+  const summary = useMemo(() => {
+    const maxBy = (key: SortKey) =>
+      tokens.reduce<GraduatedToken | null>((best, token) => {
+        const value = token[key];
+        if (value == null) return best;
+        const bestValue = best?.[key];
+        return bestValue == null || bestValue < value ? token : best;
+      }, null);
+    const totalVolume = tokens.reduce((sum, token) => sum + (token.volume24h ?? 0), 0);
+    return {
+      topVolume: maxBy('volume24h'),
+      topGainer: maxBy('priceChange24h'),
+      topMarketCap: maxBy('marketCap'),
+      totalVolume,
+    };
+  }, [tokens]);
+
+  const handleSort = useCallback(
+    (key: SortKey) => {
+      if (key === sortKey) {
+        setSortDir((dir) => (dir === 'desc' ? 'asc' : 'desc'));
+      } else {
+        setSortKey(key);
+        setSortDir('desc');
+      }
+      setPage(1);
+    },
+    [sortKey],
+  );
 
   // Pagination
   const totalPages = Math.ceil(sortedTokens.length / ITEMS_PER_PAGE);
@@ -233,16 +275,27 @@ function App() {
               message="No graduated tokens found"
             />
           ) : (
-            <TokenList
-              tokens={paginatedTokens}
-              totalCount={sortedTokens.length}
-              sortOrder={sortOrder}
-              onSortChange={setSortOrder}
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              onTokenSelect={setSelectedToken}
-            />
+            <>
+              <MetaSummary
+                topVolume={summary.topVolume}
+                topGainer={summary.topGainer}
+                topMarketCap={summary.topMarketCap}
+                totalVolume={summary.totalVolume}
+                tokenCount={tokens.length}
+                onSelect={setSelectedToken}
+              />
+              <TokenList
+                tokens={paginatedTokens}
+                totalCount={sortedTokens.length}
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={handleSort}
+                page={page}
+                totalPages={totalPages}
+                onPageChange={setPage}
+                onTokenSelect={setSelectedToken}
+              />
+            </>
           )}
         </main>
       </div>

@@ -1,30 +1,18 @@
-export interface ExpectedSlot {
-  slot: string;
-  slotDate: string;
-  slotHour: number;
-  cutoffAt: string;
-  due: boolean;
-}
-
 export interface SyncRunLike {
   slot: string;
   startedAt: number;
   status: string;
 }
 
-export interface ExpectedSlotStatus<Run extends SyncRunLike> extends ExpectedSlot {
-  monitored: boolean;
-  runs: Run[];
-  run: Run | null;
-  status: string;
-  hasSuccess: boolean;
-}
+// Scheduled sync runs every 2 hours (00:00, 02:00, … 22:00 UTC).
+export const SYNC_INTERVAL_MS = 2 * 60 * 60 * 1000;
+export const SYNC_GRACE_MS = 30 * 60 * 1000;
+// Health tolerates a single missed run before alerting: two intervals + grace.
+export const SYNC_STALE_AFTER_MS = 2 * SYNC_INTERVAL_MS + SYNC_GRACE_MS;
 
-export const SLOT_INTERVAL_MS = 12 * 60 * 60 * 1000;
-export const SLOT_GRACE_MS = 30 * 60 * 1000;
-
+// Buckets a timestamp into its 2-hour cron slot, used to label each sync run.
 export function getScheduledSlot(date: Date): { slot: string; slotDate: string; slotHour: number } {
-  const slotHour = date.getUTCHours() < 12 ? 0 : 12;
+  const slotHour = Math.floor(date.getUTCHours() / 2) * 2;
   const slotDate = date.toISOString().split('T')[0];
   const slotTime = new Date(Date.UTC(
     date.getUTCFullYear(),
@@ -43,67 +31,26 @@ export function getScheduledSlot(date: Date): { slot: string; slotDate: string; 
   };
 }
 
-export function getCurrentSlotStart(now: Date): Date {
-  return new Date(getScheduledSlot(now).slot);
-}
-
-export function getRecentExpectedSlots(now: Date, count: number): ExpectedSlot[] {
-  const currentSlotStart = getCurrentSlotStart(now);
-
-  return Array.from({ length: count }, (_, index) => {
-    const slotStart = new Date(currentSlotStart.getTime() - index * SLOT_INTERVAL_MS);
-    const cutoff = new Date(slotStart.getTime() + SLOT_GRACE_MS);
-
-    return {
-      slot: slotStart.toISOString(),
-      slotDate: slotStart.toISOString().split('T')[0],
-      slotHour: slotStart.getUTCHours(),
-      cutoffAt: cutoff.toISOString(),
-      due: now.getTime() >= cutoff.getTime(),
-    };
-  });
-}
-
-export function buildExpectedSlotStatuses<Run extends SyncRunLike>(
-  expectedSlots: ExpectedSlot[],
-  slotRuns: Run[],
-  oldestRun: Run | null,
-): ExpectedSlotStatus<Run>[] {
-  const runsBySlot = new Map<string, Run[]>();
-  for (const run of slotRuns) {
-    const runs = runsBySlot.get(run.slot) || [];
-    runs.push(run);
-    runsBySlot.set(run.slot, runs);
+export function getLatestSuccessfulRun<Run extends SyncRunLike>(runs: Run[]): Run | null {
+  let latest: Run | null = null;
+  for (const run of runs) {
+    if (run.status === 'success' && (latest === null || run.startedAt > latest.startedAt)) {
+      latest = run;
+    }
   }
-
-  return expectedSlots.map((slot) => {
-    const runs = runsBySlot.get(slot.slot) || [];
-    const latestRunForSlot = [...runs].sort((a, b) => b.startedAt - a.startedAt)[0] || null;
-    const hasSuccess = runs.some((run) => run.status === 'success');
-    const monitored = oldestRun
-      ? runs.length > 0 || new Date(slot.cutoffAt).getTime() >= oldestRun.startedAt
-      : false;
-
-    return {
-      ...slot,
-      monitored,
-      runs,
-      run: latestRunForSlot,
-      status: latestRunForSlot?.status || 'missing',
-      hasSuccess,
-    };
-  });
+  return latest;
 }
 
-export function getMissingDueSlots<Run extends SyncRunLike>(
-  expectedSlots: ExpectedSlotStatus<Run>[],
-): ExpectedSlotStatus<Run>[] {
-  return expectedSlots.filter((slot) => slot.monitored && slot.due && !slot.hasSuccess);
+export function getSyncAgeMs(latestSuccess: SyncRunLike | null, now: number): number | null {
+  if (!latestSuccess) return null;
+  return Math.max(0, now - latestSuccess.startedAt);
 }
 
-export function isHealthOk<Run extends SyncRunLike>(
-  oldestRun: Run | null,
-  missingDueSlots: ExpectedSlotStatus<Run>[],
-): boolean {
-  return Boolean(oldestRun) && missingDueSlots.length === 0;
+// Healthy when a sync has succeeded within the stale window. Returns false until
+// the first successful run is recorded. This is cadence-agnostic: it asks "did a
+// sync succeed recently?" rather than auditing fixed per-slot expectations, so it
+// never false-alarms on historical slots after a cadence change.
+export function isHealthOk(latestSuccess: SyncRunLike | null, now: number): boolean {
+  const age = getSyncAgeMs(latestSuccess, now);
+  return age !== null && age <= SYNC_STALE_AFTER_MS;
 }

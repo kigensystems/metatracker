@@ -64,11 +64,9 @@ export function FreshnessBar({ freshness }: FreshnessBarProps) {
         mb: 3,
         p: 1.5,
         border: 1,
-        borderColor: freshness.isStale ? 'warning.main' : 'divider',
+        borderColor: 'divider',
         borderRadius: 1,
-        backgroundColor: freshness.isStale
-          ? 'rgba(245, 158, 11, 0.08)'
-          : 'rgba(24, 24, 27, 0.62)',
+        backgroundColor: 'rgba(24, 24, 27, 0.62)',
         display: 'flex',
         alignItems: { xs: 'flex-start', md: 'center' },
         justifyContent: 'space-between',
@@ -130,7 +128,7 @@ export function FreshnessBar({ freshness }: FreshnessBarProps) {
         <Typography
           variant="caption"
           sx={{
-            color: freshness.isStale ? 'warning.main' : 'text.secondary',
+            color: 'text.secondary',
             display: 'block',
             textAlign: { xs: 'left', md: 'right' },
           }}

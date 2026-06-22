@@ -32,7 +32,7 @@ DexScreener enrichment runs in Netlify Functions before snapshot writes.
 
 Core production flow:
 
-1. Netlify scheduled function runs at 00:00 and 12:00 UTC.
+1. Netlify scheduled function runs every 2 hours (00:00, 02:00, … 22:00 UTC).
 2. Fetches Dune query `4124453`.
 3. Enriches tokens through DexScreener in batches.
 4. Writes token snapshots and sync metadata to Convex.
@@ -60,7 +60,8 @@ same columns, and is used by `POST /api/backfill`.
 ### DexScreener
 
 `https://api.dexscreener.com/latest/dex/tokens/{mint}` — token name, image,
-market cap, website, X/Twitter, and pair creation timestamp.
+banner (`info.header`, ~72% coverage), market cap, volume, liquidity, 24h price
+change, website, X/Twitter, and pair creation timestamp.
 
 ## Cache and Snapshot Rules
 
@@ -77,7 +78,7 @@ requests must not update `duneMetadata` unless a matching snapshot is also store
 
 ## Scheduled Sync
 
-Schedule: `0 0,12 * * *` (UTC). The scheduled Netlify background function:
+Schedule: `0 */2 * * *` (UTC) — every 2 hours. The scheduled Netlify background function:
 
 1. Records a best-effort `syncRuns` start row for the expected cron slot.
 2. Fetches the Dune result with bounded retries.
@@ -87,19 +88,23 @@ Schedule: `0 0,12 * * *` (UTC). The scheduled Netlify background function:
 6. Updates `duneMetadata`.
 7. Patches the `syncRuns` row with success/failure detail.
 
-Daily snapshots are one row per UTC date, so a date can have data even if one of
-the two daily slots failed — operational health should come from `syncRuns` and
-`/api/health`, not snapshot presence. Because the live Dune query is
-rolling-window (not calendar-day), snapshot dates mark when the rolling result
+Daily snapshots are one row per UTC date, overwritten by each 2-hourly run, so a
+date can have data even if some runs failed — operational health should come from
+`syncRuns` and `/api/health`, not snapshot presence. Because the live Dune query
+is rolling-window (not calendar-day), snapshot dates mark when the rolling result
 was stored; user-facing history tabs describe rolling snapshot windows, not
 token-created calendar days.
 
 ## Frontend Behavior
 
-- Header: logo, last-updated, next-sync countdown, token count, refresh.
+- Header: logo, last-updated, next-sync countdown (every 2h), refresh.
+- "Current meta" summary strip: top volume, top gainer, top market cap, total
+  24h volume (each token card opens that token's drawer).
 - Date picker: latest rolling 24h plus recent rolling snapshot windows.
-- Token table: market-cap sorting, 50-row pagination, row → detail drawer, and
-  DexScreener / website / X links when available.
+- Token table: sortable by 24h volume (default), market cap, or 24h % change;
+  volume + market cap + color-coded 24h % inline; 50-row pagination; row →
+  detail drawer (banner, full stats, DexScreener / Birdeye / Solscan / website /
+  X links).
 - Empty historical snapshots are filtered out.
 - Manual browser refresh only bypasses the client cache; it does not send
   `force=true`.
@@ -126,14 +131,15 @@ snapshot windows, not calendar-day buckets).
 ### `GET /api/health`
 
 Read-only health endpoint backed by Convex sync audit data and daily snapshots;
-does not call Dune. Healthy:
+does not call Dune. Health is recency-based: OK when a sync succeeded within
+~4.5h (two 2h intervals + a 30-minute grace). Healthy:
 
 ```json
-{ "ok": true, "latestRun": { "status": "success" }, "missingDueSlots": [] }
+{ "ok": true, "latestSuccess": { "status": "success" }, "syncAgeMinutes": 12, "staleAfterMinutes": 270 }
 ```
 
-Returns `503` when an expected 00:00 or 12:00 UTC slot is past its 30-minute
-grace window without a successful `syncRuns` record.
+Returns `503` when no successful `syncRuns` record exists within the stale window
+(`syncAgeMinutes` > `staleAfterMinutes`, or no success at all).
 
 ### `POST /api/backfill`
 
@@ -161,7 +167,7 @@ notification only (no Slack/Discord/SMS/PagerDuty unless wired up).
 
 When an alert opens:
 
-1. Open `/api/health`; check `missingDueSlots`, `latestRun`, `latestSnapshot`.
+1. Open `/api/health`; check `syncAgeMinutes`, `latestSuccess`, `latestRun`, `latestSnapshot`.
 2. Check Netlify function logs for `scheduled-sync`.
 3. If a slot is missing and Dune access works, start with a `dryRun=true` backfill check.
 4. Don't run `replaceExisting=true` until you've confirmed the existing snapshot is missing or bad.
@@ -216,7 +222,7 @@ prove Netlify detected the cron.
 ```text
 convex/            schema + queries/mutations (dailySnapshots, duneMetadata, graduatedTokens, syncRuns)
 netlify/functions/ graduated, available-dates, health, scheduled-sync, backfill, _shared/
-src/               App.tsx, components/, lib/ (types, theme)
+src/               App.tsx, components/, lib/ (types, theme, format)
 .github/workflows/ health-monitor.yml
 ```
 
@@ -251,14 +257,17 @@ curl -H "x-admin-refresh-token: $ADMIN_REFRESH_TOKEN" \
 - `syncRuns` — durable scheduled-sync/backfill audit log; the operational health source.
 - `graduatedTokens` — token rows linked to snapshot dates.
 
-A single successful snapshot does not prove both daily cron slots ran.
+A single successful snapshot does not prove every 2-hourly run succeeded; check `syncRuns`.
 
 ## Dune Credit Notes
 
-Normal scheduled-sync credit usage is small for the current query shape. On
-2026-06-17 a full live response was ~6.3 KB; at Dune's Free export rate of 20
-credits/MB that is ~0.12 credits per full export — even 60 pulls/month is ~7–8
-credits, far below the 2,500 monthly included.
+Scheduled-sync credit usage is small even at the 2-hourly cadence. Free tier =
+2,500 credits/month, billed at 1 credit per 1,000 datapoints (rows × columns).
+Query `4124453` returns ~47 rows × 5 cols ≈ 235 datapoints ≈ ~0.24 credits per
+read; `GET /results` reads the cached execution (no re-execution). At every-2h
+that is ~360 reads/month ≈ ~14% of the monthly credits (hourly would be ~29%).
+The `limit=0` freshness check is ~0 datapoints. Executing the query yourself
+(POST /execute, used by backfill) is the expensive path.
 
 - Credit-sensitive: scheduled sync, authorized `force=true`, real backfills, query growth (more rows/columns).
 - Low/no usage: historical browsing, `/api/available-dates`, `/api/health`, backfill `dryRun=true`.

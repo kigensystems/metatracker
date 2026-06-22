@@ -19,6 +19,7 @@ export interface StoredToken {
   symbol: string;
   name: string;
   image?: string;
+  bannerImage?: string;
   marketCap?: number;
   liquidity?: number;
   volume24h?: number;
@@ -110,6 +111,8 @@ interface DexScreenerPair {
   pairCreatedAt?: number;
   info?: {
     imageUrl?: string;
+    header?: string;
+    openGraph?: string;
     websites?: Array<{ url: string }>;
     socials?: Array<{ type: string; url: string }>;
   };
@@ -511,6 +514,7 @@ export async function enrichTokens(tokens: DuneGraduatedToken[]): Promise<Enrich
         symbol: token.symbol || dex?.baseToken?.symbol || "???",
         name: dex?.baseToken?.name || token.symbol || "Unknown",
         image: dex?.info?.imageUrl || undefined,
+        bannerImage: dex?.info?.header || dex?.info?.openGraph || undefined,
         marketCap: token.marketCap || dex?.marketCap || undefined,
         liquidity: dex?.liquidity?.usd || undefined,
         volume24h: dex?.volume?.h24 || undefined,

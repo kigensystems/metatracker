@@ -198,9 +198,9 @@ export default async function handler(_request: Request, _context: Context) {
   }
 }
 
-// Run every 12 hours (at 00:00 and 12:00 UTC)
-// Background function allows up to 15 minutes execution time
+// Run every 2 hours (at 00:00, 02:00, … 22:00 UTC) to keep the stored snapshot
+// close to Dune's latest execution. Background function allows up to 15 minutes.
 export const config: Config & { type: "background" } = {
-  schedule: "0 0,12 * * *",
+  schedule: "0 */2 * * *",
   type: "background",
 };

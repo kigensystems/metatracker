@@ -28,25 +28,16 @@ export function Header({
 
   useEffect(() => {
     const calculateTimeUntilSync = () => {
-      const now = new Date();
-      const utcHours = now.getUTCHours();
-      const utcMinutes = now.getUTCMinutes();
+      const slotMs = 2 * 60 * 60 * 1000;
+      const now = Date.now();
+      const nextSlot = Math.ceil(now / slotMs) * slotMs;
+      const minutesUntil = Math.max(0, Math.round((nextSlot - now) / 60000));
+      const hours = Math.floor(minutesUntil / 60);
+      const minutes = minutesUntil % 60;
 
-      let hoursUntil: number;
-      if (utcHours < 12) {
-        hoursUntil = 11 - utcHours + (utcMinutes > 0 ? 0 : 1);
-      } else {
-        hoursUntil = 23 - utcHours + (utcMinutes > 0 ? 0 : 1);
-      }
-      const minutesUntil = utcMinutes > 0 ? 60 - utcMinutes : 0;
-
-      if (hoursUntil === 0 && minutesUntil <= 1) {
-        return 'Soon';
-      } else if (hoursUntil === 0) {
-        return `${minutesUntil}m`;
-      } else {
-        return `${hoursUntil}h ${minutesUntil}m`;
-      }
+      if (minutesUntil <= 1) return 'Soon';
+      if (hours === 0) return `${minutes}m`;
+      return `${hours}h ${minutes}m`;
     };
 
     setTimeUntilSync(calculateTimeUntilSync());
@@ -114,7 +105,7 @@ export function Header({
           )}
 
           {/* Next sync countdown */}
-          <Tooltip title="Next scheduled sync (00:00 or 12:00 UTC)" arrow>
+          <Tooltip title="Next scheduled sync (every 2h, UTC)" arrow>
             <Chip
               icon={<SyncIcon sx={{ fontSize: 14 }} />}
               label={timeUntilSync}

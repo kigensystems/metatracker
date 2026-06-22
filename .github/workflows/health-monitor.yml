@@ -52,7 +52,9 @@ jobs:
             console.error(`Health endpoint unhealthy: status=${status}, ok=${payload.ok}`);
             console.error(JSON.stringify({
               checkedAt: payload.checkedAt,
-              missingDueSlots: payload.missingDueSlots,
+              syncAgeMinutes: payload.syncAgeMinutes,
+              staleAfterMinutes: payload.staleAfterMinutes,
+              latestSuccess: payload.latestSuccess,
               latestRun: payload.latestRun,
               latestSnapshot: payload.latestSnapshot,
             }, null, 2));
