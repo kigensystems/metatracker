@@ -1,59 +1,3 @@
-export interface DuneGraduatedToken {
-  mint: string;
-  graduated_at: string;
-  bonding_curve_address?: string;
-  creator?: string;
-}
-
-export interface DexScreenerToken {
-  chainId: string;
-  dexId: string;
-  url: string;
-  pairAddress: string;
-  baseToken: {
-    address: string;
-    name: string;
-    symbol: string;
-  };
-  quoteToken: {
-    address: string;
-    name: string;
-    symbol: string;
-  };
-  priceNative: string;
-  priceUsd: string;
-  txns: {
-    h24: { buys: number; sells: number };
-    h6: { buys: number; sells: number };
-    h1: { buys: number; sells: number };
-    m5: { buys: number; sells: number };
-  };
-  volume: {
-    h24: number;
-    h6: number;
-    h1: number;
-    m5: number;
-  };
-  priceChange: {
-    h24: number;
-    h6: number;
-    h1: number;
-    m5: number;
-  };
-  liquidity: {
-    usd: number;
-    base: number;
-    quote: number;
-  };
-  fdv: number;
-  marketCap: number;
-  info?: {
-    imageUrl?: string;
-    websites?: Array<{ url: string }>;
-    socials?: Array<{ type: string; url: string }>;
-  };
-}
-
 export interface GraduatedToken {
   // Core data from Dune
   mint: string;
@@ -101,8 +45,4 @@ export interface DataFreshness {
     failedCount: number;
     successRate: number;
   } | null;
-}
-
-export interface FilterOptions {
-  sortOrder: 'asc' | 'desc';
 }
