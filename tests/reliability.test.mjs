@@ -1,9 +1,8 @@
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
-import { pathToFileURL } from 'node:url';
 
-const retryUrl = pathToFileURL('/tmp/metatracker-health-test/retry.js').href;
-const tokenSyncUrl = pathToFileURL('/tmp/metatracker-health-test/token-sync.js').href;
+const retryUrl = new URL('../node_modules/.cache/health-test/retry.js', import.meta.url).href;
+const tokenSyncUrl = new URL('../node_modules/.cache/health-test/token-sync.js', import.meta.url).href;
 
 const { withRetries } = await import(retryUrl);
 const {

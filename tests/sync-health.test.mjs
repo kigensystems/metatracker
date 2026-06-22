@@ -1,8 +1,7 @@
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
-import { pathToFileURL } from 'node:url';
 
-const helperUrl = pathToFileURL('/tmp/metatracker-health-test/sync-health.js').href;
+const helperUrl = new URL('../node_modules/.cache/health-test/sync-health.js', import.meta.url).href;
 const {
   SYNC_INTERVAL_MS,
   SYNC_STALE_AFTER_MS,

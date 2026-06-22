@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "netlify": "netlify dev",
     "typecheck:functions": "tsc --noEmit --skipLibCheck --module ESNext --moduleResolution bundler --target ES2020 --lib ES2020,DOM --strict netlify/functions-types.d.ts netlify/functions/graduated.ts netlify/functions/scheduled-sync.ts netlify/functions/available-dates.ts netlify/functions/health.ts netlify/functions/backfill.ts netlify/functions/_shared/sync-health.ts netlify/functions/_shared/retry.ts netlify/functions/_shared/token-sync.ts",
-    "test:health": "tsc --target ES2022 --module NodeNext --moduleResolution NodeNext --strict --skipLibCheck --outDir /tmp/metatracker-health-test netlify/functions/_shared/sync-health.ts netlify/functions/_shared/retry.ts netlify/functions/_shared/token-sync.ts && node --test tests/*.test.mjs"
+    "test:health": "tsc --target ES2022 --module NodeNext --moduleResolution NodeNext --strict --skipLibCheck --outDir node_modules/.cache/health-test netlify/functions/_shared/sync-health.ts netlify/functions/_shared/retry.ts netlify/functions/_shared/token-sync.ts && node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
