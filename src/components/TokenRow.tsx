@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Box, Typography, IconButton, Avatar } from '@mui/material';
 import LanguageIcon from '@mui/icons-material/Language';
-import TelegramIcon from '@mui/icons-material/Telegram';
 import type { GraduatedToken } from '../lib/types';
 
 function XIcon() {
@@ -47,13 +46,22 @@ export function TokenRow({ token, index, onSelect }: TokenRowProps) {
     window.open(url, '_blank');
   };
 
-  const hasSocials = token.website || token.twitter || token.telegram;
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onSelect(token);
+    }
+  };
+
+  const hasSocials = token.website || token.twitter;
 
   return (
     <Box
-      component="button"
-      type="button"
+      component="div"
+      role="button"
+      tabIndex={0}
       onClick={() => onSelect(token)}
+      onKeyDown={handleKeyDown}
       sx={{
         display: 'grid',
         gridTemplateColumns: '48px 48px 1fr 110px 112px',
@@ -181,18 +189,6 @@ export function TokenRow({ token, index, onSelect }: TokenRowProps) {
                 }}
               >
                 <XIcon />
-              </IconButton>
-            )}
-            {token.telegram && (
-              <IconButton
-                size="small"
-                onClick={(e) => handleLinkClick(e, token.telegram!)}
-                sx={{
-                  color: 'text.secondary',
-                  '&:hover': { color: 'text.primary', backgroundColor: 'action.hover' },
-                }}
-              >
-                <TelegramIcon sx={{ fontSize: 18 }} />
               </IconButton>
             )}
           </>

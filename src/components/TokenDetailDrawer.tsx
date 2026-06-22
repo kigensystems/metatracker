@@ -17,7 +17,6 @@ import CloseIcon from '@mui/icons-material/Close';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import LanguageIcon from '@mui/icons-material/Language';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import TelegramIcon from '@mui/icons-material/Telegram';
 import type { GraduatedToken } from '../lib/types';
 
 interface TokenDetailDrawerProps {
@@ -132,7 +131,6 @@ export function TokenDetailDrawer({ token, open, onClose }: TokenDetailDrawerPro
       { label: 'Solscan', url: token.links.solscan, icon: <OpenInNewIcon /> },
       { label: 'Website', url: token.website, icon: <LanguageIcon /> },
       { label: 'X', url: token.twitter, icon: <XIcon /> },
-      { label: 'Telegram', url: token.telegram, icon: <TelegramIcon /> },
     ];
 
     return links.filter((link): link is ExternalLink => (
