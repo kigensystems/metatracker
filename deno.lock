@@ -11,20 +11,27 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
-        "npm:@netlify/functions@^5.1.0",
-        "npm:@tailwindcss/vite@^4.1.17",
+        "npm:@emotion/react@^11.14.0",
+        "npm:@emotion/styled@^11.14.1",
+        "npm:@mui/icons-material@7.3.11",
+        "npm:@mui/material@7.3.11",
+        "npm:@netlify/functions@5.3.0",
+        "npm:@tailwindcss/vite@4.3.1",
         "npm:@types/react-dom@^19.2.3",
         "npm:@types/react@^19.2.7",
-        "npm:@vitejs/plugin-react@^5.1.1",
-        "npm:framer-motion@^12.23.25",
-        "npm:lucide-react@0.556",
-        "npm:react-dom@^19.2.1",
-        "npm:react@^19.2.1",
-        "npm:recharts@^3.5.1",
-        "npm:tailwindcss@^4.1.17",
+        "npm:@vitejs/plugin-react@5.2.0",
+        "npm:convex@1.41.0",
+        "npm:framer-motion@12.40.0",
+        "npm:lucide-react@1.20.0",
+        "npm:react-dom@19.2.7",
+        "npm:react@19.2.7",
+        "npm:tailwindcss@4.3.1",
         "npm:typescript@^5.9.3",
-        "npm:vite@^7.2.6"
-      ]
+        "npm:vite@8.0.16"
+      ],
+      "overrides": {
+        "ws": "8.21.0"
+      }
     }
   }
 }
