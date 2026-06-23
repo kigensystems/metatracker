@@ -60,7 +60,10 @@ npx tsc --noEmit -p convex/tsconfig.json   # typecheck Convex
   replacement exists.
 - **Production Convex is `dusty-ox-307`.** A second deployment
   (`qualified-hound-245`) exists; switching `CONVEX_URL` is a deliberate data
-  migration, not a casual change.
+  migration, not a casual change. `dusty-ox-307` is Convex's *dev* deployment, so
+  `npx convex deploy` pushes to the wrong one (`qualified-hound-245`); update the
+  live store with `npx convex dev --once` (verify via `npx convex dashboard
+  --no-open`).
 - **Only scheduled-sync and admin backfill write durable snapshots.** Live /
   manual fetches may return fresh data but must not advance `duneMetadata`
   unless a matching snapshot is stored.

@@ -207,15 +207,20 @@ The build emits a known Vite chunk-size warning; that is not a failure.
 ## Deployment
 
 ```bash
-npx convex deploy
-netlify deploy --prod --skip-functions-cache
+npx convex dev --once   # push schema + functions to the LIVE store dusty-ox-307
+git push origin main    # auto-deploys Netlify (npm run build) from main
 ```
 
-Redeploy Netlify after changing env vars so functions receive them. Because the
-live backend is `dusty-ox-307`, verify the Convex deploy target before assuming
-production updated. After any deploy touching functions, confirm deploy metadata
-includes `function_schedules` for `scheduled-sync` — TypeScript passing does not
-prove Netlify detected the cron.
+`npx convex deploy` is the WRONG command here: it targets the project's prod
+deployment `qualified-hound-245`, which the app does not read. The live backend
+is `dusty-ox-307` — Convex's *dev* deployment (`CONVEX_DEPLOYMENT`) — so push to
+it with `npx convex dev --once`; verify the target first with `npx convex
+dashboard --no-open`. Deploy Convex before Netlify so the live store accepts new
+fields before functions send them. Netlify auto-deploys on push to `main`;
+`netlify deploy --prod --skip-functions-cache` is the manual fallback. Redeploy
+after changing env vars so functions receive them. After any deploy touching
+functions, confirm deploy metadata includes `function_schedules` for
+`scheduled-sync` — TypeScript passing does not prove Netlify detected the cron.
 
 ## Repository Map
 
