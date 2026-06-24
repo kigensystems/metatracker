@@ -34,6 +34,18 @@ export function formatAge(timestamp: number | null | undefined): string {
   return `${days}d`;
 }
 
+// Absolute creation time, e.g. "Jun 22, 2:30 PM" — the companion to formatAge.
+export function formatDateTime(timestamp: number | null | undefined): string {
+  if (!timestamp) return '—';
+  return new Date(timestamp).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
 export function formatCompact(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—';
   return new Intl.NumberFormat('en-US', {

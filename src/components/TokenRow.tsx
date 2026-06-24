@@ -2,7 +2,7 @@ import { memo, useState } from 'react';
 import { Box, Typography, IconButton, Avatar } from '@mui/material';
 import LanguageIcon from '@mui/icons-material/Language';
 import type { GraduatedToken } from '../lib/types';
-import { changeColor, formatAge, formatPercent, formatUsd } from '../lib/format';
+import { changeColor, formatAge, formatDateTime, formatPercent, formatUsd } from '../lib/format';
 import { XIcon } from './icons';
 
 // Shared column template so the header and every row stay aligned.
@@ -126,9 +126,17 @@ export const TokenRow = memo(function TokenRow({ token, index, onSelect }: Token
               ${token.symbol}
             </Typography>
             {token.createdAt && (
-              <Typography variant="caption" sx={{ color: 'text.secondary', flexShrink: 0 }}>
-                · {formatAge(token.createdAt)}
-              </Typography>
+              <>
+                <Typography variant="caption" sx={{ color: 'text.secondary', flexShrink: 0 }}>
+                  · {formatAge(token.createdAt)}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{ display: { xs: 'none', sm: 'inline' }, color: 'text.secondary', flexShrink: 0, whiteSpace: 'nowrap' }}
+                >
+                  · {formatDateTime(token.createdAt)}
+                </Typography>
+              </>
             )}
           </Box>
         </Box>

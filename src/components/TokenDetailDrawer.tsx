@@ -18,7 +18,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import LanguageIcon from '@mui/icons-material/Language';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import type { GraduatedToken } from '../lib/types';
-import { changeColor, formatAge, formatCompact, formatPercent, formatUsd } from '../lib/format';
+import { changeColor, formatAge, formatCompact, formatDateTime, formatPercent, formatUsd } from '../lib/format';
 import { XIcon } from './icons';
 
 interface TokenDetailDrawerProps {
@@ -37,17 +37,6 @@ interface ExternalLink {
   label: string;
   url: string;
   icon: ReactNode;
-}
-
-function formatDateTime(timestamp: number | null | undefined): string {
-  if (!timestamp) return '—';
-  return new Date(timestamp).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
 }
 
 function shortMint(mint: string): string {
