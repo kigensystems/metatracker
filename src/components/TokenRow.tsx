@@ -132,7 +132,7 @@ export const TokenRow = memo(function TokenRow({ token, index, onSelect }: Token
                 </Typography>
                 <Typography
                   variant="caption"
-                  sx={{ display: { xs: 'none', sm: 'inline' }, color: 'text.secondary', flexShrink: 0, whiteSpace: 'nowrap' }}
+                  sx={{ display: { xs: 'none', md: 'inline' }, color: 'text.secondary', flexShrink: 0, whiteSpace: 'nowrap' }}
                 >
                   · {formatDateTime(token.createdAt)}
                 </Typography>
