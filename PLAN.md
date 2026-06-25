@@ -14,8 +14,13 @@ quick-reference is [CLAUDE.md](CLAUDE.md).
   `/api/health`, bounded retries, snapshot write-guards, admin-only `force=true`
   and `POST /api/backfill`, and a GitHub Actions health monitor.
 - The token detail drawer + data freshness bar shipped to `main` (see HISTORY).
-- Volume-first redesign, 2h sync cadence, and recency-based health are in the
-  working tree (see HISTORY 2026-06-22); deploy + cron re-verify still pending.
+- Volume-first redesign, 2h sync cadence, and recency-based health are **live in
+  production** (deployed 2026-06-23, see HISTORY): Convex `dusty-ox-307` updated
+  via `convex dev --once`, Netlify deployed, `function_schedules` cron verified,
+  banners populating (48/59), `/api/health` green.
+- Token creation time now shows in the list rows next to age — local-zone with a
+  label (e.g. `Jun 23, 10:15 PM PDT`), at `md`+ width — reusing the drawer's
+  shared `formatDateTime` (2026-06-23).
 
 ## Active risks
 
@@ -25,6 +30,11 @@ quick-reference is [CLAUDE.md](CLAUDE.md).
   exists, and never print it in repos, docs, logs, or screenshots.
 - **Recoverability, not credits, is the main gap.** Monitoring detects missing
   slots; backfill repairs them. Always start a backfill with `dryRun=true`.
+- **`/api/scheduled-sync` is unauthenticated** (found 2026-06-23). It's a public
+  `type: "background"` function with a cron schedule, so a plain HTTP POST runs
+  the full sync (Dune + DexScreener + Convex write). Dune reads are ~free so
+  abuse impact is low, but it should be gated — the hard part is distinguishing
+  Netlify's cron invocation from a public POST.
 - **Stale-cache UX.** Softened (2026-06-22): the freshness bar no longer turns
   alarming orange, and the 2-hourly sync keeps the stored snapshot within ~2h of
   Dune's latest. A brief `cache-stale` label can still appear between a Dune

@@ -6,6 +6,33 @@ operations docs see [README.md](../README.md).
 
 ---
 
+## 2026-06-23 — Redesign deployed to production; creation time in list rows
+
+Deployed the 2026-06-22 volume-first redesign to production, fixed a Convex
+deploy footgun, and shipped a list follow-up.
+
+- **Convex deploy footgun caught + fixed.** `npx convex deploy` targets the
+  project's *prod* deployment `qualified-hound-245`, which the app does **not**
+  read — Netlify's `CONVEX_URL` points at `dusty-ox-307` (Convex's *dev*
+  deployment). A `convex deploy --dry-run` confirmed the wrong target before any
+  push; the live store is updated with **`npx convex dev --once`** instead.
+  README + CLAUDE.md were corrected (they previously said `convex deploy`).
+- **Deploy sequence.** Convex first (`convex dev --once` → `dusty-ox-307`,
+  additive optional `bannerImage`, no data migration), then Netlify via push to
+  `main` (auto-deploy from the linked GitHub repo). Verified `function_schedules`
+  cron `0 */2 * * *`, `/api/health` `ok:true`, and `bannerImage` populating
+  (48/59 tokens after the first new-code sync).
+- **Found (logged as a risk): `/api/scheduled-sync` is unauthenticated** — a
+  public POST runs the full sync. Low impact (Dune reads ~free), to be gated.
+- **Creation time in list rows.** Each row shows the absolute creation time next
+  to age, reusing the drawer's `formatDateTime` (lifted into shared
+  `src/lib/format.ts`). Rendered in the viewer's local zone with a label (e.g.
+  `Jun 23, 10:15 PM PDT`); shown at `md`+ width so the longer string doesn't
+  squeeze `$SYMBOL` out of the row.
+- `deno.lock` synced with `package.json` to match the redesign's dependencies.
+
+---
+
 ## 2026-06-22 — Volume-first redesign, 2h sync, recency-based health
 
 Goal: make the dashboard a fast personal "quick lookup" for the current
