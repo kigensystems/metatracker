@@ -2,7 +2,9 @@
 
 Forward-looking plan and active risks. Past incidents and rollout notes are in
 [docs/HISTORY.md](docs/HISTORY.md). Architecture and operating instructions are
-in [README.md](README.md) and [CLAUDE.md](CLAUDE.md).
+in [README.md](README.md) and [CLAUDE.md](CLAUDE.md). The latest production
+audit and next-session starting point are in
+[docs/HANDOFF-2026-07-21.md](docs/HANDOFF-2026-07-21.md).
 
 ## Purpose
 

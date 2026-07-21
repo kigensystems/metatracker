@@ -2,7 +2,8 @@
 
 Quick reference for working in this repo. Deeper docs: [README.md](README.md).
 Forward plan: [PLAN.md](PLAN.md). Past incidents + changelog:
-[docs/HISTORY.md](docs/HISTORY.md).
+[docs/HISTORY.md](docs/HISTORY.md). Latest verified production handoff:
+[docs/HANDOFF-2026-07-21.md](docs/HANDOFF-2026-07-21.md).
 
 ## What this is
 
