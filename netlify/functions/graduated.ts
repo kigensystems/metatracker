@@ -3,11 +3,11 @@ import { ConvexHttpClient } from 'convex/browser';
 import { api } from '../../convex/_generated/api';
 import {
   DEFAULT_DUNE_QUERY_ID,
-  buildTokenLinks,
   enrichTokens,
   fetchLatestDuneData,
   fetchLatestDuneStatus,
 } from './_shared/token-sync';
+import { toApiToken, type TokenLike } from './_shared/api-contract';
 
 const QUERY_ID = DEFAULT_DUNE_QUERY_ID;
 
@@ -18,26 +18,6 @@ const headers = {
   'Content-Type': 'application/json',
 };
 
-interface TokenLike {
-  mint?: unknown;
-  name?: unknown;
-  symbol?: unknown;
-  image?: unknown;
-  bannerImage?: unknown;
-  priceUsd?: unknown;
-  volume24h?: unknown;
-  liquidity?: unknown;
-  marketCap?: unknown;
-  priceChange24h?: unknown;
-  tradeCount?: unknown;
-  createdAt?: unknown;
-  dexScreenerUrl?: unknown;
-  website?: unknown;
-  twitter?: unknown;
-  telegram?: unknown;
-  linksJson?: unknown;
-}
-
 interface SnapshotLike {
   capturedAt?: number;
   executionEndedAt?: string;
@@ -46,61 +26,6 @@ interface SnapshotLike {
 interface MetadataLike {
   lastFetchedAt?: number;
   lastExecutionEndedAt?: string;
-}
-
-function stringValue(value: unknown, fallback = ''): string {
-  return typeof value === 'string' && value.length > 0 ? value : fallback;
-}
-
-function stringOrNull(value: unknown): string | null {
-  return typeof value === 'string' && value.length > 0 ? value : null;
-}
-
-function numberOrNull(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
-function parseLinks(value: unknown, mint: string) {
-  const fallback = mint ? buildTokenLinks(mint) : {
-    dexscreener: null,
-    birdeye: '',
-    solscan: '',
-  };
-
-  if (typeof value !== 'string') return fallback;
-
-  try {
-    return {
-      ...fallback,
-      ...JSON.parse(value),
-    };
-  } catch {
-    return fallback;
-  }
-}
-
-function toApiToken(stored: TokenLike) {
-  const mint = stringValue(stored.mint);
-
-  return {
-    mint,
-    name: stringValue(stored.name, 'Unknown'),
-    symbol: stringValue(stored.symbol, '???'),
-    image: stringOrNull(stored.image),
-    bannerImage: stringOrNull(stored.bannerImage),
-    priceUsd: numberOrNull(stored.priceUsd),
-    volume24h: numberOrNull(stored.volume24h),
-    liquidity: numberOrNull(stored.liquidity),
-    marketCap: numberOrNull(stored.marketCap),
-    priceChange24h: numberOrNull(stored.priceChange24h),
-    tradeCount: numberOrNull(stored.tradeCount),
-    createdAt: numberOrNull(stored.createdAt),
-    dexScreenerUrl: stringOrNull(stored.dexScreenerUrl),
-    website: stringOrNull(stored.website),
-    twitter: stringOrNull(stored.twitter),
-    telegram: stringOrNull(stored.telegram),
-    links: parseLinks(stored.linksJson, mint),
-  };
 }
 
 // Get today's date in UTC

@@ -1,0 +1,33 @@
+{
+  "tokens": [
+    {
+      "mint": "HistoricalFixtureMint1111111111111111111111111",
+      "name": "Historical Fixture",
+      "symbol": "HIST",
+      "image": null,
+      "bannerImage": null,
+      "priceUsd": 0.00004,
+      "volume24h": 90000,
+      "liquidity": 12000,
+      "marketCap": 40000,
+      "priceChange24h": -82.5,
+      "tradeCount": 140,
+      "createdAt": null,
+      "dexScreenerUrl": null,
+      "website": null,
+      "twitter": null,
+      "telegram": null,
+      "links": {
+        "dexscreener": "https://dexscreener.com/solana/HistoricalFixtureMint1111111111111111111111111",
+        "birdeye": "https://birdeye.so/token/HistoricalFixtureMint1111111111111111111111111?chain=solana",
+        "solscan": "https://solscan.io/token/HistoricalFixtureMint1111111111111111111111111"
+      }
+    }
+  ],
+  "totalCount": 1,
+  "snapshotDate": "2026-06-01",
+  "capturedAt": 1780308000000,
+  "duneExecutionEndedAt": "2026-06-01T12:00:00.000Z",
+  "source": "historical",
+  "dateMode": "rolling-snapshot"
+}

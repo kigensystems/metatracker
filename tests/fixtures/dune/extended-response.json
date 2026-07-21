@@ -1,0 +1,29 @@
+{
+  "execution_id": "fixture-extended-execution",
+  "query_id": 9999999,
+  "state": "QUERY_STATE_COMPLETED",
+  "execution_ended_at": "2026-07-18T14:00:00.000Z",
+  "result": {
+    "rows": [
+      {
+        "token_address": "ExtendedFixtureMint111111111111111111111111111",
+        "asset": "EXTENDED",
+        "market_cap": 250000,
+        "trade_count": 654,
+        "vwap_token_price": 0.00025,
+        "graduation_time": "2026-07-18T11:30:00.000Z",
+        "buy_count": 400,
+        "sell_count": 254,
+        "volume_usd": 750000,
+        "observed_peak_market_cap": 900000,
+        "observed_peak_at": "2026-07-18T12:15:00.000Z",
+        "source_execution_ended_at": "2026-07-18T14:00:00.000Z"
+      }
+    ],
+    "metadata": {
+      "row_count": 1,
+      "total_row_count": 1,
+      "result_set_bytes": 512
+    }
+  }
+}

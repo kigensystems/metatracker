@@ -1,18 +1,25 @@
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
 
-const helperUrl = new URL('../node_modules/.cache/health-test/sync-health.js', import.meta.url).href;
+const helperUrl = new URL('../node_modules/.cache/health-test/netlify/functions/_shared/sync-health.js', import.meta.url).href;
 const {
   SYNC_INTERVAL_MS,
   SYNC_STALE_AFTER_MS,
+  DUNE_STALE_AFTER_MS,
   getScheduledSlot,
   getLatestSuccessfulRun,
   getSyncAgeMs,
+  getDuneAgeMs,
   isHealthOk,
 } = await import(helperUrl);
 
 function run(status, startedAt, slot = '2026-06-17T12:00:00.000Z') {
-  return { slot, status, startedAt: new Date(startedAt).getTime() };
+  return {
+    slot,
+    status,
+    startedAt: new Date(startedAt).getTime(),
+    duneExecutionEndedAt: startedAt,
+  };
 }
 
 test('buckets timestamps into 2-hour cron slots', () => {
@@ -65,6 +72,36 @@ test('is healthy when the last success is within the stale window', () => {
   const success = run('success', '2026-06-17T14:00:00.000Z');
   assert.equal(isHealthOk(success, now), true);
   assert.equal(getSyncAgeMs(success, now), 35 * 60 * 1000);
+  assert.equal(getDuneAgeMs(success, now), 35 * 60 * 1000);
+});
+
+test('uses completion time for sync recency when it is available', () => {
+  const success = {
+    ...run('success', '2026-06-17T12:00:00.000Z'),
+    endedAt: Date.parse('2026-06-17T12:05:00.000Z'),
+  };
+
+  assert.equal(
+    getSyncAgeMs(success, Date.parse('2026-06-17T12:35:00.000Z')),
+    30 * 60 * 1000,
+  );
+});
+
+test('flags a stale Dune execution even when the app sync just succeeded', () => {
+  const now = Date.parse('2026-06-17T14:00:00.000Z');
+  const success = {
+    ...run('success', '2026-06-17T14:00:00.000Z'),
+    duneExecutionEndedAt: new Date(now - DUNE_STALE_AFTER_MS - 60 * 1000).toISOString(),
+  };
+
+  assert.equal(isHealthOk(success, now), false);
+});
+
+test('flags a successful run that has no trustworthy Dune execution time', () => {
+  const success = run('success', '2026-06-17T14:00:00.000Z');
+  delete success.duneExecutionEndedAt;
+
+  assert.equal(isHealthOk(success, Date.parse('2026-06-17T14:10:00.000Z')), false);
 });
 
 test('tolerates a single missed run but flags a sustained outage', () => {

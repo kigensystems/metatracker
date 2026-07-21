@@ -16,6 +16,13 @@ export interface GraduatedToken {
   priceChange24h: number | null;
   tradeCount: number | null;
   createdAt: number | null;
+  graduatedAt?: number | null;
+  observedPeakMarketCap?: number | null;
+  observedPeakAt?: number | null;
+  measuredVolumeUsd?: number | null;
+  buyCount?: number | null;
+  sellCount?: number | null;
+  sourceExecutionEndedAt?: string | null;
   dexScreenerUrl: string | null;
 
   // Socials

@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { assertSourceExecutionNotOlder } from "./snapshot-guards";
 
 export const get = query({
   args: { queryId: v.string() },
@@ -30,6 +31,7 @@ export const update = mutation({
       .first();
 
     if (existing) {
+      assertSourceExecutionNotOlder(args.lastExecutionEndedAt, existing.lastExecutionEndedAt);
       await ctx.db.patch(existing._id, {
         lastExecutionEndedAt: args.lastExecutionEndedAt,
         lastFetchedAt: args.lastFetchedAt,

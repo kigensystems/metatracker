@@ -2,7 +2,8 @@ name: Health Monitor
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    # Offset from the top of the hour, when GitHub reports the most schedule congestion.
+    - cron: "7,17,27,37,47,57 * * * *"
   push:
     branches:
       - main
@@ -54,6 +55,8 @@ jobs:
               checkedAt: payload.checkedAt,
               syncAgeMinutes: payload.syncAgeMinutes,
               staleAfterMinutes: payload.staleAfterMinutes,
+              duneAgeMinutes: payload.duneAgeMinutes,
+              duneStaleAfterMinutes: payload.duneStaleAfterMinutes,
               latestSuccess: payload.latestSuccess,
               latestRun: payload.latestRun,
               latestSnapshot: payload.latestSnapshot,

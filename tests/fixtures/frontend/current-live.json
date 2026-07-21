@@ -1,0 +1,36 @@
+{
+  "tokens": [
+    {
+      "mint": "LiveFixtureMint111111111111111111111111111111",
+      "name": "Live Fixture",
+      "symbol": "LIVE",
+      "image": "https://example.invalid/live.png",
+      "bannerImage": null,
+      "priceUsd": 0.00012,
+      "volume24h": 450000,
+      "liquidity": 80000,
+      "marketCap": 120000,
+      "priceChange24h": 15.5,
+      "tradeCount": 250,
+      "createdAt": 1784376000000,
+      "dexScreenerUrl": "https://dexscreener.com/solana/LiveFixtureMint111111111111111111111111111111",
+      "website": "https://example.invalid",
+      "twitter": null,
+      "telegram": null,
+      "links": {
+        "dexscreener": "https://dexscreener.com/solana/LiveFixtureMint111111111111111111111111111111",
+        "birdeye": "https://birdeye.so/token/LiveFixtureMint111111111111111111111111111111?chain=solana",
+        "solscan": "https://solscan.io/token/LiveFixtureMint111111111111111111111111111111"
+      }
+    }
+  ],
+  "totalCount": 1,
+  "fetchedAt": "2026-07-18T14:05:00.000Z",
+  "duneExecutionEndedAt": "2026-07-18T14:00:00.000Z",
+  "source": "live",
+  "snapshotDate": "2026-07-18",
+  "enrichment": {
+    "failedCount": 0,
+    "successRate": 100
+  }
+}

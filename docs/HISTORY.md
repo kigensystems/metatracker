@@ -6,6 +6,40 @@ operations docs see [README.md](../README.md).
 
 ---
 
+## 2026-07-21 - Reliability and compatibility work prepared (not deployed)
+
+This working tree was audited and prepared for a staged production rollout. No
+Convex or Netlify deployment was performed during this pass.
+
+- Added contract fixtures for current, historical, partially enriched, and
+  proposed extended token data. The tests now exercise the shared API mapper,
+  Convex validators, frontend parser, and snapshot replacement guards.
+- Added optional backend fields for graduation time, observed peak market cap,
+  measured volume, buy/sell counts, and source timestamps without changing the
+  existing response when those fields are absent.
+- Prevented an older concurrent Dune result from replacing a newer daily
+  snapshot or moving Dune metadata backward.
+- Strengthened `/api/health`: both the app sync and the Dune execution it used
+  must be recent. Missing or malformed Dune execution timestamps now fail
+  validation instead of being replaced with the current time.
+- Hardened external links to HTTP(S), added `noopener,noreferrer` to row links,
+  and fixed undefined loading/error color classes.
+- Offset the GitHub health-monitor schedule away from the top of the hour.
+  GitHub issue alerts remain the only notification channel and scheduled Actions
+  can still be delayed or dropped.
+- Verified the test suite, frontend build, Functions typecheck, and Convex
+  typecheck. A local Netlify end-to-end pass exercised `/api/health`, live and
+  historical data, date-window switching, token counts, the detail drawer, and
+  outbound link safety without unexpected browser errors. Production deployment
+  and post-sync smoke testing remain required.
+
+The public background sync endpoint is still unresolved. The planned safe shape
+is a non-public scheduled dispatcher that invokes an authenticated long-running
+worker; the current enrichment job is too long for Netlify's 30-second scheduled
+function limit.
+
+---
+
 ## 2026-06-23 — Redesign deployed to production; creation time in list rows
 
 Deployed the 2026-06-22 volume-first redesign to production, fixed a Convex

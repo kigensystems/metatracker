@@ -8,6 +8,7 @@ import { TokenDetailDrawer } from './components/TokenDetailDrawer';
 import { LoadingScreen } from './components/LoadingScreen';
 import { EmptyState } from './components/EmptyState';
 import type { DataFreshness, GraduatedToken, SortKey } from './lib/types';
+import { parseGraduatedPayload } from './lib/api-contract';
 
 const API_BASE =
   import.meta.env.VITE_API_BASE ?? (import.meta.env.DEV ? '/.netlify/functions' : '/api');
@@ -25,45 +26,6 @@ interface CachedData {
 }
 
 const ITEMS_PER_PAGE = 50;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function stringOrNull(value: unknown): string | null {
-  return typeof value === 'string' && value.length > 0 ? value : null;
-}
-
-function numberOrNull(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
-function buildFreshness(data: Record<string, unknown>, totalCount: number): DataFreshness {
-  const enrichmentData = isRecord(data.enrichment) ? data.enrichment : null;
-  const enrichment = enrichmentData
-    ? {
-        failedCount: numberOrNull(enrichmentData.failedCount) ?? 0,
-        successRate: numberOrNull(enrichmentData.successRate) ?? 0,
-      }
-    : null;
-
-  const source = stringOrNull(data.source);
-  const isStale = Boolean(data.isStale) || source === 'cache-stale';
-
-  return {
-    source,
-    snapshotDate: stringOrNull(data.snapshotDate),
-    fetchedAt: stringOrNull(data.fetchedAt),
-    capturedAt: numberOrNull(data.capturedAt),
-    duneExecutionEndedAt: stringOrNull(data.duneExecutionEndedAt),
-    latestDuneExecutionEndedAt: stringOrNull(data.latestDuneExecutionEndedAt),
-    isStale,
-    staleReason: stringOrNull(data.staleReason),
-    dateMode: stringOrNull(data.dateMode),
-    totalCount: numberOrNull(data.totalCount) ?? totalCount,
-    enrichment,
-  };
-}
 
 function App() {
   const [tokens, setTokens] = useState<GraduatedToken[]>([]);
@@ -136,9 +98,11 @@ function App() {
         throw new Error(data.error);
       }
 
-      const fetchedTokens = data.tokens || [];
-      const updatedAt = new Date(data.fetchedAt || data.capturedAt || Date.now());
-      const nextFreshness = buildFreshness(data, fetchedTokens.length);
+      const {
+        tokens: fetchedTokens,
+        updatedAt,
+        freshness: nextFreshness,
+      } = parseGraduatedPayload(data);
 
       setTokens(fetchedTokens);
       setLastUpdated(updatedAt);

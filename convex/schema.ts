@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { storedTokenValidator } from "./token-validator";
 
 export default defineSchema({
   // Tracks Dune query execution state for cache invalidation
@@ -36,9 +37,9 @@ export default defineSchema({
   // Scheduled sync attempt audit log
   syncRuns: defineTable({
     queryId: v.string(),
-    slot: v.string(), // ISO timestamp for expected 00:00 or 12:00 UTC cron slot
+    slot: v.string(), // ISO timestamp for the expected 2-hour UTC cron slot
     slotDate: v.string(), // "2025-12-05"
-    slotHour: v.number(), // 0 or 12
+    slotHour: v.number(), // even UTC hour from 0 through 22
     trigger: v.string(), // "scheduled"
     status: v.string(), // "running", "success", or "failed"
     startedAt: v.number(),
@@ -65,49 +66,7 @@ export default defineSchema({
     .index("by_started_at", ["startedAt"]),
 
   // Individual token records linked to snapshots
-  graduatedTokens: defineTable({
-    snapshotDate: v.string(),
-    mint: v.string(),
-    symbol: v.string(),
-    name: v.string(),
-    image: v.optional(v.string()),
-    bannerImage: v.optional(v.string()),
-    marketCap: v.optional(v.number()),
-    liquidity: v.optional(v.number()),
-    volume24h: v.optional(v.number()),
-    priceUsd: v.optional(v.number()),
-    priceChange24h: v.optional(v.number()),
-    tradeCount: v.optional(v.number()),
-    createdAt: v.optional(v.number()), // Pair creation timestamp from DexScreener
-    linksJson: v.string(), // JSON stringified links object
-    dexScreenerUrl: v.optional(v.string()),
-    website: v.optional(v.string()),
-    twitter: v.optional(v.string()),
-    telegram: v.optional(v.string()),
-    // ========================================
-    // DEPRECATED FIELDS
-    // Kept for backward compatibility with existing data.
-    // Do not use in new code. Will be removed after data migration.
-    // ========================================
-    /** @deprecated No longer populated - was from rugcheck integration */
-    freezeAuthorityRevoked: v.optional(v.boolean()),
-    /** @deprecated No longer populated - was from rugcheck integration */
-    mintAuthorityRevoked: v.optional(v.boolean()),
-    /** @deprecated No longer populated */
-    lpBurned: v.optional(v.boolean()),
-    /** @deprecated No longer populated - was from rugcheck integration */
-    lpLockedPercent: v.optional(v.number()),
-    /** @deprecated No longer populated */
-    top10HolderPercent: v.optional(v.number()),
-    /** @deprecated No longer populated */
-    legitimacyScore: v.optional(v.number()),
-    /** @deprecated No longer populated - was from rugcheck integration */
-    rugcheckScore: v.optional(v.number()),
-    /** @deprecated No longer populated */
-    riskLevel: v.optional(v.string()),
-    /** @deprecated No longer populated */
-    risksJson: v.optional(v.string()),
-  })
+  graduatedTokens: defineTable(storedTokenValidator)
     .index("by_date", ["snapshotDate"])
     .index("by_mint", ["mint"]),
 });

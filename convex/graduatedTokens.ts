@@ -1,36 +1,11 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-
-// Token data shape for storage
-const tokenValidator = v.object({
-  mint: v.string(),
-  symbol: v.string(),
-  name: v.string(),
-  image: v.optional(v.string()),
-  bannerImage: v.optional(v.string()),
-  marketCap: v.optional(v.number()),
-  liquidity: v.optional(v.number()),
-  volume24h: v.optional(v.number()),
-  priceUsd: v.optional(v.number()),
-  priceChange24h: v.optional(v.number()),
-  tradeCount: v.optional(v.number()),
-  createdAt: v.optional(v.number()),
-  linksJson: v.string(),
-  dexScreenerUrl: v.optional(v.string()),
-  website: v.optional(v.string()),
-  twitter: v.optional(v.string()),
-  telegram: v.optional(v.string()),
-  // Legacy fields
-  freezeAuthorityRevoked: v.optional(v.boolean()),
-  mintAuthorityRevoked: v.optional(v.boolean()),
-  lpBurned: v.optional(v.boolean()),
-  lpLockedPercent: v.optional(v.number()),
-  top10HolderPercent: v.optional(v.number()),
-  legitimacyScore: v.optional(v.number()),
-  rugcheckScore: v.optional(v.number()),
-  riskLevel: v.optional(v.string()),
-  risksJson: v.optional(v.string()),
-});
+import {
+  assertSourceExecutionNotOlder,
+  evaluateSnapshotReplacement,
+  validateSnapshotInput,
+} from "./snapshot-guards";
+import { tokenValidator } from "./token-validator";
 
 const sourceMetadataValidator = v.object({
   queryId: v.string(),
@@ -79,33 +54,9 @@ export const storeSnapshot = mutation({
     minExistingTokenRetentionRatio: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    if (args.tokens.length === 0) {
-      throw new Error(`Refusing to store empty snapshot for ${args.date}.`);
-    }
-
-    if (args.sourceMetadata) {
-      if (args.sourceMetadata.state && args.sourceMetadata.state !== "QUERY_STATE_COMPLETED") {
-        throw new Error(`Refusing to store incomplete Dune result (${args.sourceMetadata.state}).`);
-      }
-
-      if (args.sourceMetadata.rowCount < args.sourceMetadata.totalRowCount) {
-        throw new Error(
-          `Refusing to store partial Dune result (${args.sourceMetadata.rowCount}/${args.sourceMetadata.totalRowCount} rows).`,
-        );
-      }
-
-      if (args.tokens.length < args.sourceMetadata.rowCount) {
-        throw new Error(
-          `Refusing to store malformed Dune result (${args.tokens.length}/${args.sourceMetadata.rowCount} usable token rows).`,
-        );
-      }
-    }
-
     // Safety check: only allow overwriting today's data unless an admin backfill explicitly opts in.
     const today = new Date().toISOString().split("T")[0];
-    if (args.date !== today && !args.allowHistorical) {
-      throw new Error(`Cannot overwrite historical data for ${args.date}. Only today (${today}) can be updated.`);
-    }
+    validateSnapshotInput(args, today);
 
     const existing = await ctx.db
       .query("graduatedTokens")
@@ -117,24 +68,23 @@ export const storeSnapshot = mutation({
       .withIndex("by_date", (q) => q.eq("date", args.date))
       .first();
 
-    const hasGoodExistingSnapshot = existing.length > 0 && (existingSnapshot?.tokenCount ?? existing.length) > 0;
-    if (hasGoodExistingSnapshot && args.replaceExisting === false) {
+    assertSourceExecutionNotOlder(args.executionEndedAt, existingSnapshot?.executionEndedAt);
+
+    const replacement = evaluateSnapshotReplacement({
+      incomingTokenCount: args.tokens.length,
+      existingTokenCount: existing.length,
+      existingSnapshotTokenCount: existingSnapshot?.tokenCount,
+      replaceExisting: args.replaceExisting,
+      allowPartialOverwrite: args.allowPartialOverwrite,
+      minExistingTokenRetentionRatio: args.minExistingTokenRetentionRatio,
+    });
+
+    if (replacement.skip) {
       return {
         stored: existing.length,
         skipped: true,
-        reason: "snapshot-exists",
+        reason: replacement.reason,
       };
-    }
-
-    const minRetentionRatio = args.minExistingTokenRetentionRatio ?? 0.5;
-    if (
-      hasGoodExistingSnapshot
-      && !args.allowPartialOverwrite
-      && args.tokens.length < existing.length * minRetentionRatio
-    ) {
-      throw new Error(
-        `Refusing to replace ${existing.length} existing tokens with ${args.tokens.length}; possible partial upstream response.`,
-      );
     }
 
     // Delete existing tokens for this date (idempotent replacement for same-day syncs and approved backfills).

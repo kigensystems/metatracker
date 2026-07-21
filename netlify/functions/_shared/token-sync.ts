@@ -6,6 +6,13 @@ export interface DuneGraduatedToken {
   marketCap: number;
   tradeCount: number;
   vwapPrice: number;
+  graduatedAt?: number;
+  observedPeakMarketCap?: number;
+  observedPeakAt?: number;
+  measuredVolumeUsd?: number;
+  buyCount?: number;
+  sellCount?: number;
+  sourceExecutionEndedAt?: string;
 }
 
 export interface TokenLinks {
@@ -27,6 +34,13 @@ export interface StoredToken {
   priceChange24h?: number;
   tradeCount?: number;
   createdAt?: number;
+  graduatedAt?: number;
+  observedPeakMarketCap?: number;
+  observedPeakAt?: number;
+  measuredVolumeUsd?: number;
+  buyCount?: number;
+  sellCount?: number;
+  sourceExecutionEndedAt?: string;
   linksJson: string;
   dexScreenerUrl: string;
   website?: string;
@@ -214,20 +228,62 @@ function asFiniteNumber(value: unknown, fallback: number): number {
   return Number.isFinite(numberValue) ? numberValue : fallback;
 }
 
+function asOptionalFiniteNumber(value: unknown): number | undefined {
+  if (value === null || value === undefined || value === "") return undefined;
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : undefined;
+}
+
+function asOptionalTimestamp(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value < 1_000_000_000_000 ? value * 1_000 : value;
+  }
+
+  if (typeof value !== "string" || value.length === 0) return undefined;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : undefined;
+}
+
+function asOptionalTimestampString(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.length === 0) return undefined;
+  return Number.isFinite(Date.parse(value)) ? value : undefined;
+}
+
 function parseDuneRows(rows: Record<string, unknown>[]): DuneGraduatedToken[] {
   return rows
-    .map((row) => ({
-      mint: String(row.token_address || ""),
-      symbol: String(row.asset || "???"),
-      marketCap: Number(row.market_cap) || 0,
-      tradeCount: Number(row.trade_count) || 0,
-      vwapPrice: Number(row.vwap_token_price) || 0,
-    }))
+    .map((row) => {
+      const graduatedAt = asOptionalTimestamp(row.graduation_time);
+      const observedPeakMarketCap = asOptionalFiniteNumber(row.observed_peak_market_cap);
+      const observedPeakAt = asOptionalTimestamp(row.observed_peak_at);
+      const measuredVolumeUsd = asOptionalFiniteNumber(row.volume_usd);
+      const buyCount = asOptionalFiniteNumber(row.buy_count);
+      const sellCount = asOptionalFiniteNumber(row.sell_count);
+      const sourceExecutionEndedAt = asOptionalTimestampString(row.source_execution_ended_at);
+
+      return {
+        mint: String(row.token_address || ""),
+        symbol: String(row.asset || "???"),
+        marketCap: Number(row.market_cap) || 0,
+        tradeCount: Number(row.trade_count) || 0,
+        vwapPrice: Number(row.vwap_token_price) || 0,
+        ...(graduatedAt !== undefined ? { graduatedAt } : {}),
+        ...(observedPeakMarketCap !== undefined ? { observedPeakMarketCap } : {}),
+        ...(observedPeakAt !== undefined ? { observedPeakAt } : {}),
+        ...(measuredVolumeUsd !== undefined ? { measuredVolumeUsd } : {}),
+        ...(buyCount !== undefined ? { buyCount } : {}),
+        ...(sellCount !== undefined ? { sellCount } : {}),
+        ...(sourceExecutionEndedAt !== undefined ? { sourceExecutionEndedAt } : {}),
+      };
+    })
     .filter((token) => token.mint && token.mint.length > 30);
 }
 
 export function validateDuneResultCompleteness(result: DuneFetchResult) {
   const { tokens, sourceMetadata } = result;
+
+  if (!Number.isFinite(Date.parse(result.executionEndedAt))) {
+    throw new Error(`Dune returned an invalid execution timestamp (${result.executionEndedAt})`);
+  }
 
   if (sourceMetadata.state && sourceMetadata.state !== "QUERY_STATE_COMPLETED") {
     throw new Error(`Dune query did not complete cleanly: ${sourceMetadata.state}`);
@@ -271,11 +327,16 @@ async function parseDuneResponse(
     metadata.result_set_bytes ?? metadata.total_result_set_bytes,
     textByteLength(responseText),
   );
-  const executionEndedAt = data.execution_ended_at || new Date().toISOString();
+  const executionEndedAt = data.execution_ended_at || "";
   const state = data.state || "QUERY_STATE_COMPLETED";
 
+  const tokens = parseDuneRows(rows).map((token) => ({
+    ...token,
+    sourceExecutionEndedAt: token.sourceExecutionEndedAt || executionEndedAt,
+  }));
+
   const result: DuneFetchResult = {
-    tokens: parseDuneRows(rows),
+    tokens,
     executionEndedAt,
     sourceMetadata: {
       queryId: String(data.query_id ?? queryId),
@@ -326,8 +387,13 @@ export async function fetchLatestDuneStatus(
   }
 
   const data = JSON.parse(responseText) as DuneResponse;
+  const executionEndedAt = data.execution_ended_at || "";
+  if (!Number.isFinite(Date.parse(executionEndedAt))) {
+    throw new Error(`Dune returned an invalid execution timestamp (${executionEndedAt})`);
+  }
+
   return {
-    executionEndedAt: data.execution_ended_at || new Date().toISOString(),
+    executionEndedAt,
     state: data.state || "QUERY_STATE_COMPLETED",
     responseStatusCode: response.status,
     executionId: data.execution_id,
@@ -522,6 +588,13 @@ export async function enrichTokens(tokens: DuneGraduatedToken[]): Promise<Enrich
         priceChange24h: dex?.priceChange?.h24 || undefined,
         tradeCount: token.tradeCount || undefined,
         createdAt: dex?.pairCreatedAt || undefined,
+        graduatedAt: token.graduatedAt,
+        observedPeakMarketCap: token.observedPeakMarketCap,
+        observedPeakAt: token.observedPeakAt,
+        measuredVolumeUsd: token.measuredVolumeUsd,
+        buyCount: token.buyCount,
+        sellCount: token.sellCount,
+        sourceExecutionEndedAt: token.sourceExecutionEndedAt,
         linksJson: JSON.stringify(links),
         dexScreenerUrl: links.dexscreener,
         website: dex?.info?.websites?.[0]?.url || undefined,

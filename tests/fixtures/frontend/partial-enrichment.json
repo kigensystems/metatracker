@@ -1,0 +1,36 @@
+{
+  "tokens": [
+    {
+      "mint": "PartialFixtureMint111111111111111111111111111",
+      "name": "PARTIAL",
+      "symbol": "PARTIAL",
+      "image": null,
+      "bannerImage": null,
+      "priceUsd": 0.00003,
+      "volume24h": null,
+      "liquidity": null,
+      "marketCap": 30000,
+      "priceChange24h": null,
+      "tradeCount": 101,
+      "createdAt": null,
+      "dexScreenerUrl": "https://dexscreener.com/solana/PartialFixtureMint111111111111111111111111111",
+      "website": null,
+      "twitter": null,
+      "telegram": null,
+      "links": {
+        "dexscreener": "https://dexscreener.com/solana/PartialFixtureMint111111111111111111111111111",
+        "birdeye": "https://birdeye.so/token/PartialFixtureMint111111111111111111111111111?chain=solana",
+        "solscan": "https://solscan.io/token/PartialFixtureMint111111111111111111111111111"
+      }
+    }
+  ],
+  "totalCount": 1,
+  "fetchedAt": "2026-07-18T14:05:00.000Z",
+  "duneExecutionEndedAt": "2026-07-18T14:00:00.000Z",
+  "source": "live",
+  "snapshotDate": "2026-07-18",
+  "enrichment": {
+    "failedCount": 1,
+    "successRate": 0
+  }
+}

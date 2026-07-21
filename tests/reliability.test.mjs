@@ -1,8 +1,8 @@
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
 
-const retryUrl = new URL('../node_modules/.cache/health-test/retry.js', import.meta.url).href;
-const tokenSyncUrl = new URL('../node_modules/.cache/health-test/token-sync.js', import.meta.url).href;
+const retryUrl = new URL('../node_modules/.cache/health-test/netlify/functions/_shared/retry.js', import.meta.url).href;
+const tokenSyncUrl = new URL('../node_modules/.cache/health-test/netlify/functions/_shared/token-sync.js', import.meta.url).href;
 
 const { withRetries } = await import(retryUrl);
 const {
@@ -86,6 +86,16 @@ test('Dune result guard rejects malformed token rows', () => {
   );
 });
 
+test('Dune result guard rejects an invalid execution timestamp', () => {
+  const result = duneResult();
+  result.executionEndedAt = 'not-a-date';
+
+  assert.throws(
+    () => validateDuneResultCompleteness(result),
+    /invalid execution timestamp/,
+  );
+});
+
 test('buildTokenLinks centralizes token explorer URLs', () => {
   assert.deepEqual(buildTokenLinks('MintAddress'), {
     dexscreener: 'https://dexscreener.com/solana/MintAddress',
@@ -121,6 +131,22 @@ test('fetchLatestDuneStatus uses the metadata-only Dune results endpoint', async
       responseStatusCode: 200,
       executionId: 'exec_123',
     });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('fetchLatestDuneStatus rejects a missing execution timestamp', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    state: 'QUERY_STATE_COMPLETED',
+  }), { status: 200 });
+
+  try {
+    await assert.rejects(
+      () => fetchLatestDuneStatus('test-key', 'query-123'),
+      /invalid execution timestamp/,
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }

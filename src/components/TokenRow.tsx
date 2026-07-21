@@ -2,6 +2,7 @@ import { memo, useState } from 'react';
 import { Box, Typography, IconButton, Avatar } from '@mui/material';
 import LanguageIcon from '@mui/icons-material/Language';
 import type { GraduatedToken } from '../lib/types';
+import { safeExternalUrl } from '../lib/external-url';
 import { changeColor, formatAge, formatDateTime, formatPercent, formatUsd } from '../lib/format';
 import { XIcon } from './icons';
 
@@ -30,7 +31,11 @@ export const TokenRow = memo(function TokenRow({ token, index, onSelect }: Token
   const handleLinkClick = (e: React.MouseEvent, url: string) => {
     e.preventDefault();
     e.stopPropagation();
-    window.open(url, '_blank');
+    const safeUrl = safeExternalUrl(url);
+    if (!safeUrl) return;
+
+    const opened = window.open(safeUrl, '_blank', 'noopener,noreferrer');
+    if (opened) opened.opener = null;
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -41,7 +46,9 @@ export const TokenRow = memo(function TokenRow({ token, index, onSelect }: Token
   };
 
   const change = token.priceChange24h;
-  const hasSocials = token.website || token.twitter;
+  const website = safeExternalUrl(token.website);
+  const twitter = safeExternalUrl(token.twitter);
+  const hasSocials = website || twitter;
 
   return (
     <Box
@@ -176,20 +183,20 @@ export const TokenRow = memo(function TokenRow({ token, index, onSelect }: Token
       <Box sx={{ display: { xs: 'none', sm: 'flex' }, justifyContent: 'flex-end', gap: 0.5 }}>
         {hasSocials ? (
           <>
-            {token.website && (
+            {website && (
               <IconButton
                 size="small"
-                onClick={(e) => handleLinkClick(e, token.website!)}
+                onClick={(e) => handleLinkClick(e, website)}
                 aria-label="Website"
                 sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary', backgroundColor: 'action.hover' } }}
               >
                 <LanguageIcon sx={{ fontSize: 18 }} />
               </IconButton>
             )}
-            {token.twitter && (
+            {twitter && (
               <IconButton
                 size="small"
-                onClick={(e) => handleLinkClick(e, token.twitter!)}
+                onClick={(e) => handleLinkClick(e, twitter)}
                 aria-label="X"
                 sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary', backgroundColor: 'action.hover' } }}
               >

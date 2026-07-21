@@ -1,0 +1,43 @@
+{
+  "tokens": [
+    {
+      "mint": "ExtendedFixtureMint111111111111111111111111111",
+      "name": "Extended Fixture",
+      "symbol": "EXTENDED",
+      "image": null,
+      "bannerImage": null,
+      "priceUsd": 0.00025,
+      "volume24h": 700000,
+      "liquidity": 100000,
+      "marketCap": 250000,
+      "priceChange24h": -70,
+      "tradeCount": 654,
+      "createdAt": 1784374200000,
+      "dexScreenerUrl": "https://dexscreener.com/solana/ExtendedFixtureMint111111111111111111111111111",
+      "website": null,
+      "twitter": null,
+      "telegram": null,
+      "links": {
+        "dexscreener": "https://dexscreener.com/solana/ExtendedFixtureMint111111111111111111111111111",
+        "birdeye": "https://birdeye.so/token/ExtendedFixtureMint111111111111111111111111111?chain=solana",
+        "solscan": "https://solscan.io/token/ExtendedFixtureMint111111111111111111111111111"
+      },
+      "graduatedAt": 1784374200000,
+      "observedPeakMarketCap": 900000,
+      "observedPeakAt": 1784376900000,
+      "measuredVolumeUsd": 750000,
+      "buyCount": 400,
+      "sellCount": 254,
+      "sourceExecutionEndedAt": "2026-07-18T14:00:00.000Z"
+    }
+  ],
+  "totalCount": 1,
+  "fetchedAt": "2026-07-18T14:05:00.000Z",
+  "duneExecutionEndedAt": "2026-07-18T14:00:00.000Z",
+  "source": "live",
+  "snapshotDate": "2026-07-18",
+  "enrichment": {
+    "failedCount": 0,
+    "successRate": 100
+  }
+}

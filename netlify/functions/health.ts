@@ -2,7 +2,9 @@ import type { Context } from '@netlify/functions';
 import { ConvexHttpClient } from 'convex/browser';
 import { api } from '../../convex/_generated/api';
 import {
+  DUNE_STALE_AFTER_MS,
   SYNC_STALE_AFTER_MS,
+  getDuneAgeMs,
   getLatestSuccessfulRun,
   getSyncAgeMs,
   isHealthOk,
@@ -40,6 +42,7 @@ export default async function handler(request: Request, _context: Context) {
 
     const latestSuccess = getLatestSuccessfulRun(recentRuns);
     const ageMs = getSyncAgeMs(latestSuccess, now.getTime());
+    const duneAgeMs = getDuneAgeMs(latestSuccess, now.getTime());
     const ok = isHealthOk(latestSuccess, now.getTime());
 
     return new Response(
@@ -52,6 +55,8 @@ export default async function handler(request: Request, _context: Context) {
         latestSuccess,
         syncAgeMinutes: ageMs === null ? null : Math.round(ageMs / 60000),
         staleAfterMinutes: Math.round(SYNC_STALE_AFTER_MS / 60000),
+        duneAgeMinutes: duneAgeMs === null ? null : Math.round(duneAgeMs / 60000),
+        duneStaleAfterMinutes: Math.round(DUNE_STALE_AFTER_MS / 60000),
       }),
       { status: ok ? 200 : 503, headers },
     );

@@ -123,6 +123,11 @@ All routes are exposed through Netlify redirects under `/api/*`.
 
 Unauthenticated `force=true` returns `403`.
 
+When an extended Dune query is introduced, optional token fields such as
+`graduatedAt`, `observedPeakMarketCap`, `observedPeakAt`, `measuredVolumeUsd`,
+`buyCount`, `sellCount`, and `sourceExecutionEndedAt` pass through additively.
+They are omitted for old snapshots, so the current API contract remains valid.
+
 ### `GET /api/available-dates`
 
 Recent Convex snapshot dates + token counts for the date picker (rolling
@@ -131,15 +136,17 @@ snapshot windows, not calendar-day buckets).
 ### `GET /api/health`
 
 Read-only health endpoint backed by Convex sync audit data and daily snapshots;
-does not call Dune. Health is recency-based: OK when a sync succeeded within
-~4.5h (two 2h intervals + a 30-minute grace). Healthy:
+it does not call Dune. Health requires both a successful app sync within ~4.5h
+(two 2h intervals + grace) and a Dune execution within ~6.5h. This prevents a
+sync that repeatedly downloads an old completed result from staying green.
+Healthy:
 
 ```json
-{ "ok": true, "latestSuccess": { "status": "success" }, "syncAgeMinutes": 12, "staleAfterMinutes": 270 }
+{ "ok": true, "latestSuccess": { "status": "success" }, "syncAgeMinutes": 12, "staleAfterMinutes": 270, "duneAgeMinutes": 85, "duneStaleAfterMinutes": 390 }
 ```
 
-Returns `503` when no successful `syncRuns` record exists within the stale window
-(`syncAgeMinutes` > `staleAfterMinutes`, or no success at all).
+Returns `503` when no recent successful `syncRuns` record exists, or when that
+run used a missing, malformed, or stale Dune execution timestamp.
 
 ### `POST /api/backfill`
 
@@ -159,11 +166,14 @@ data.
 
 ## Monitoring and Alerts
 
-`.github/workflows/health-monitor.yml` runs every 10 minutes and checks
+`.github/workflows/health-monitor.yml` is configured six times per hour, offset
+from the top of the hour, and checks
 `https://metratrackerapp.netlify.app/api/health`. On failure it opens or
 comments on one GitHub issue (`meta.tracker scheduled sync health failing`) and
 fails the Actions run; on recovery it closes the issue. This is GitHub-native
-notification only (no Slack/Discord/SMS/PagerDuty unless wired up).
+notification only (no Slack/Discord/SMS/PagerDuty unless wired up). GitHub may
+delay or drop scheduled runs, so the cron expression is not a ten-minute delivery
+guarantee.
 
 When an alert opens:
 

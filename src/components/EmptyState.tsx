@@ -16,23 +16,16 @@ export function EmptyState({ type, message, onRetry, onReset }: EmptyStateProps)
       className="flex flex-col items-center justify-center py-16 px-4"
     >
       <div className="relative mb-6">
-        {/* Background glow */}
-        <div
-          className={`absolute inset-0 rounded-full blur-2xl ${
-            type === 'error' ? 'bg-neon-red/10' : 'bg-neon-blue/10'
-          }`}
-        />
-
         {/* Icon container */}
         <div
           className={`relative w-20 h-20 rounded-2xl flex items-center justify-center border ${
             type === 'error'
-              ? 'bg-neon-red/10 border-neon-red/30'
+              ? 'bg-red/10 border-red/30'
               : 'bg-slate border-steel'
           }`}
         >
           {type === 'error' ? (
-            <AlertCircle className="w-10 h-10 text-neon-red" />
+            <AlertCircle className="w-10 h-10 text-red" />
           ) : (
             <Inbox className="w-10 h-10 text-ghost" />
           )}
@@ -51,7 +44,7 @@ export function EmptyState({ type, message, onRetry, onReset }: EmptyStateProps)
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={onRetry}
-            className="flex items-center gap-2 px-5 py-2.5 bg-neon-green/10 hover:bg-neon-green/20 border border-neon-green/30 rounded-lg text-neon-green font-medium transition-colors"
+            className="flex items-center gap-2 px-5 py-2.5 bg-accent/10 hover:bg-accent/20 border border-accent/30 rounded-lg text-accent font-medium transition-colors"
           >
             <RefreshCw className="w-4 h-4" />
             Try Again
@@ -74,14 +67,14 @@ export function EmptyState({ type, message, onRetry, onReset }: EmptyStateProps)
       {type === 'error' && (
         <div className="mt-8 p-4 bg-slate/50 rounded-lg border border-steel/50 max-w-md">
           <p className="text-xs text-ghost text-center">
-            <span className="text-neon-amber">Tip:</span> Make sure you have
+            <span className="text-amber">Tip:</span> Make sure you have
             configured your <code className="text-white">DUNE_API_KEY</code>{' '}
             environment variable. You can get a free API key at{' '}
             <a
               href="https://dune.com/settings/api"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-neon-blue hover:underline"
+              className="text-blue hover:underline"
             >
               dune.com/settings/api
             </a>

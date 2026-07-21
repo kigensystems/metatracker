@@ -18,6 +18,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import LanguageIcon from '@mui/icons-material/Language';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import type { GraduatedToken } from '../lib/types';
+import { safeExternalUrl } from '../lib/external-url';
 import { changeColor, formatAge, formatCompact, formatDateTime, formatPercent, formatUsd } from '../lib/format';
 import { XIcon } from './icons';
 
@@ -68,11 +69,11 @@ export function TokenDetailDrawer({ token, open, onClose }: TokenDetailDrawerPro
     if (!token) return [];
 
     const links: Array<{ label: string; url: string | null; icon: ReactNode }> = [
-      { label: 'DexScreener', url: token.dexScreenerUrl || token.links.dexscreener, icon: <OpenInNewIcon /> },
-      { label: 'Birdeye', url: token.links.birdeye, icon: <OpenInNewIcon /> },
-      { label: 'Solscan', url: token.links.solscan, icon: <OpenInNewIcon /> },
-      { label: 'Website', url: token.website, icon: <LanguageIcon /> },
-      { label: 'X', url: token.twitter, icon: <XIcon /> },
+      { label: 'DexScreener', url: safeExternalUrl(token.dexScreenerUrl || token.links.dexscreener), icon: <OpenInNewIcon /> },
+      { label: 'Birdeye', url: safeExternalUrl(token.links.birdeye), icon: <OpenInNewIcon /> },
+      { label: 'Solscan', url: safeExternalUrl(token.links.solscan), icon: <OpenInNewIcon /> },
+      { label: 'Website', url: safeExternalUrl(token.website), icon: <LanguageIcon /> },
+      { label: 'X', url: safeExternalUrl(token.twitter), icon: <XIcon /> },
     ];
 
     return links.filter((link): link is ExternalLink => (
