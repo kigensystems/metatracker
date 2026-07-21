@@ -4,8 +4,8 @@ import {
   assertSourceExecutionNotOlder,
   evaluateSnapshotReplacement,
   validateSnapshotInput,
-} from "./snapshot-guards";
-import { tokenValidator } from "./token-validator";
+} from "./snapshot_guards";
+import { tokenValidator } from "./token_validator";
 
 const sourceMetadataValidator = v.object({
   queryId: v.string(),

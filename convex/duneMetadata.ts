@@ -1,6 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { assertSourceExecutionNotOlder } from "./snapshot-guards";
+import { assertSourceExecutionNotOlder } from "./snapshot_guards";
 
 export const get = query({
   args: { queryId: v.string() },

@@ -5,8 +5,8 @@ import test from 'node:test';
 const cacheRoot = new URL('../node_modules/.cache/health-test/', import.meta.url);
 const tokenSyncUrl = new URL('netlify/functions/_shared/token-sync.js', cacheRoot).href;
 const apiContractUrl = new URL('netlify/functions/_shared/api-contract.js', cacheRoot).href;
-const snapshotGuardsUrl = new URL('convex/snapshot-guards.js', cacheRoot).href;
-const tokenValidatorUrl = new URL('convex/token-validator.js', cacheRoot).href;
+const snapshotGuardsUrl = new URL('convex/snapshot_guards.js', cacheRoot).href;
+const tokenValidatorUrl = new URL('convex/token_validator.js', cacheRoot).href;
 const frontendContractUrl = new URL('src/lib/api-contract.js', cacheRoot).href;
 const externalUrl = new URL('src/lib/external-url.js', cacheRoot).href;
 

@@ -1,6 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-import { storedTokenValidator } from "./token-validator";
+import { storedTokenValidator } from "./token_validator";
 
 export default defineSchema({
   // Tracks Dune query execution state for cache invalidation
