@@ -28,6 +28,12 @@ export interface StoredToken {
   image?: string;
   bannerImage?: string;
   marketCap?: number;
+  duneMarketCap?: number;
+  duneVwapPrice?: number;
+  dexMarketCap?: number;
+  dexPriceUsd?: number;
+  dexFetchedAt?: number;
+  dexPairAddress?: string;
   liquidity?: number;
   volume24h?: number;
   priceUsd?: number;
@@ -37,12 +43,17 @@ export interface StoredToken {
   graduatedAt?: number;
   observedPeakMarketCap?: number;
   observedPeakAt?: number;
+  observedPeakPriceUsd?: number;
+  observedPeakFetchedAt?: number;
+  observedPeakSource?: string;
+  observedPeakSupply?: number;
+  observedPeakSupplySource?: string;
   measuredVolumeUsd?: number;
   buyCount?: number;
   sellCount?: number;
   sourceExecutionEndedAt?: string;
   linksJson: string;
-  dexScreenerUrl: string;
+  dexScreenerUrl?: string;
   website?: string;
   twitter?: string;
   telegram?: string;
@@ -116,7 +127,8 @@ interface DuneExecutionStatus {
 
 interface DexScreenerPair {
   chainId: string;
-  baseToken: { name: string; symbol: string };
+  pairAddress: string;
+  baseToken: { address: string; name: string; symbol: string };
   priceUsd: string;
   volume: { h24: number };
   liquidity: { usd: number };
@@ -157,6 +169,27 @@ export function buildTokenLinks(mint: string): TokenLinks {
     birdeye: `https://birdeye.so/token/${mint}?chain=solana`,
     solscan: `https://solscan.io/token/${mint}`,
   };
+}
+
+const SOLANA_ADDRESS_PATTERN = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+
+export function isPlausibleSolanaAddress(value: unknown): value is string {
+  return typeof value === "string" && SOLANA_ADDRESS_PATTERN.test(value);
+}
+
+export function selectDexScreenerPair(
+  pairs: DexScreenerPair[] | null | undefined,
+  mint: string,
+): DexScreenerPair | null {
+  const matchingPairs = (pairs || []).filter((pair) => (
+    pair.chainId === "solana"
+    && pair.baseToken?.address === mint
+    && isPlausibleSolanaAddress(pair.pairAddress)
+  ));
+
+  return matchingPairs.sort(
+    (a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0),
+  )[0] || null;
 }
 
 export class DuneExecutionPendingError extends Error {
@@ -519,7 +552,12 @@ export async function fetchBackfillDuneData(
   return fetchDuneExecutionData(apiKey, executionId, queryId, windowStart, windowEnd);
 }
 
-async function fetchDexScreenerOnce(mint: string): Promise<DexScreenerPair | null> {
+interface DexScreenerFetchResult {
+  pair: DexScreenerPair;
+  fetchedAt: number;
+}
+
+async function fetchDexScreenerOnce(mint: string): Promise<DexScreenerFetchResult | null> {
   const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${mint}`);
 
   if (!response.ok) {
@@ -531,11 +569,11 @@ async function fetchDexScreenerOnce(mint: string): Promise<DexScreenerPair | nul
   }
 
   const data = await response.json() as DexScreenerResponse;
-  const solanaPairs = data.pairs?.filter((pair) => pair.chainId === "solana") || [];
-  return solanaPairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0] || null;
+  const pair = selectDexScreenerPair(data.pairs, mint);
+  return pair ? { pair, fetchedAt: Date.now() } : null;
 }
 
-async function fetchDexScreener(mint: string): Promise<DexScreenerPair | null> {
+async function fetchDexScreener(mint: string): Promise<DexScreenerFetchResult | null> {
   try {
     const result = await withRetries(
       () => fetchDexScreenerOnce(mint),
@@ -563,9 +601,10 @@ export async function enrichTokens(tokens: DuneGraduatedToken[]): Promise<Enrich
     const dexResults = await Promise.all(batch.map((token) => fetchDexScreener(token.mint)));
 
     const enriched = batch.map((token, index) => {
-      const dex = dexResults[index];
+      const dexResult = dexResults[index];
+      const dex = dexResult?.pair;
 
-      if (!dex) {
+      if (!dexResult) {
         failedEnrichments.push(token.mint);
       }
 
@@ -573,7 +612,12 @@ export async function enrichTokens(tokens: DuneGraduatedToken[]): Promise<Enrich
       dex?.info?.socials?.forEach((social) => {
         socials[social.type] = social.url;
       });
+      const dexPriceUsd = dex ? asOptionalFiniteNumber(dex.priceUsd) : undefined;
+      const dexMarketCap = dex ? asOptionalFiniteNumber(dex.marketCap) : undefined;
       const links = buildTokenLinks(token.mint);
+      if (dex?.pairAddress) {
+        links.dexscreener = `https://dexscreener.com/solana/${dex.pairAddress}`;
+      }
 
       return {
         mint: token.mint,
@@ -581,10 +625,17 @@ export async function enrichTokens(tokens: DuneGraduatedToken[]): Promise<Enrich
         name: dex?.baseToken?.name || token.symbol || "Unknown",
         image: dex?.info?.imageUrl || undefined,
         bannerImage: dex?.info?.header || dex?.info?.openGraph || undefined,
-        marketCap: token.marketCap || dex?.marketCap || undefined,
+        // Keep the legacy fields stable while exposing explicit source semantics.
+        marketCap: token.marketCap || dexMarketCap || undefined,
+        duneMarketCap: token.marketCap,
+        duneVwapPrice: token.vwapPrice,
+        dexMarketCap,
+        dexPriceUsd,
+        dexFetchedAt: dexResult?.fetchedAt,
+        dexPairAddress: dex?.pairAddress,
         liquidity: dex?.liquidity?.usd || undefined,
         volume24h: dex?.volume?.h24 || undefined,
-        priceUsd: token.vwapPrice || (dex ? parseFloat(dex.priceUsd) : undefined),
+        priceUsd: token.vwapPrice || dexPriceUsd || undefined,
         priceChange24h: dex?.priceChange?.h24 || undefined,
         tradeCount: token.tradeCount || undefined,
         createdAt: dex?.pairCreatedAt || undefined,

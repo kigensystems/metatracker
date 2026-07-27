@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import {
   assertSourceExecutionNotOlder,
   evaluateSnapshotReplacement,
+  getSnapshotMergeStats,
   validateSnapshotInput,
 } from "./snapshot_guards";
 import { tokenValidator } from "./token_validator";
@@ -52,6 +53,7 @@ export const storeSnapshot = mutation({
     replaceExisting: v.optional(v.boolean()),
     allowPartialOverwrite: v.optional(v.boolean()),
     minExistingTokenRetentionRatio: v.optional(v.number()),
+    preserveExistingTokens: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     // Safety check: only allow overwriting today's data unless an admin backfill explicitly opts in.
@@ -70,14 +72,17 @@ export const storeSnapshot = mutation({
 
     assertSourceExecutionNotOlder(args.executionEndedAt, existingSnapshot?.executionEndedAt);
 
-    const replacement = evaluateSnapshotReplacement({
-      incomingTokenCount: args.tokens.length,
-      existingTokenCount: existing.length,
-      existingSnapshotTokenCount: existingSnapshot?.tokenCount,
-      replaceExisting: args.replaceExisting,
-      allowPartialOverwrite: args.allowPartialOverwrite,
-      minExistingTokenRetentionRatio: args.minExistingTokenRetentionRatio,
-    });
+    const preserveExistingTokens = args.preserveExistingTokens === true;
+    const replacement = preserveExistingTokens
+      ? { skip: false as const }
+      : evaluateSnapshotReplacement({
+          incomingTokenCount: args.tokens.length,
+          existingTokenCount: existing.length,
+          existingSnapshotTokenCount: existingSnapshot?.tokenCount,
+          replaceExisting: args.replaceExisting,
+          allowPartialOverwrite: args.allowPartialOverwrite,
+          minExistingTokenRetentionRatio: args.minExistingTokenRetentionRatio,
+        });
 
     if (replacement.skip) {
       return {
@@ -87,17 +92,38 @@ export const storeSnapshot = mutation({
       };
     }
 
-    // Delete existing tokens for this date (idempotent replacement for same-day syncs and approved backfills).
-    for (const token of existing) {
-      await ctx.db.delete(token._id);
-    }
+    let storedTokenCount = args.tokens.length;
+    let preservedTokenCount = 0;
 
-    // Insert new tokens
-    for (const token of args.tokens) {
-      await ctx.db.insert("graduatedTokens", {
-        snapshotDate: args.date,
-        ...token,
-      });
+    if (preserveExistingTokens) {
+      const merge = getSnapshotMergeStats(existing, args.tokens);
+      const existingByMint = new Map(existing.map((token) => [token.mint, token]));
+
+      // Replace rows that are present in the incoming source result, but retain
+      // every earlier token that disappeared from a later rolling window.
+      for (const token of args.tokens) {
+        const stored = existingByMint.get(token.mint);
+        if (stored) await ctx.db.delete(stored._id);
+        await ctx.db.insert("graduatedTokens", {
+          snapshotDate: args.date,
+          ...token,
+        });
+      }
+
+      storedTokenCount = merge.finalCount;
+      preservedTokenCount = merge.preservedCount;
+    } else {
+      // Exact replacement remains available for explicit historical backfills.
+      for (const token of existing) {
+        await ctx.db.delete(token._id);
+      }
+
+      for (const token of args.tokens) {
+        await ctx.db.insert("graduatedTokens", {
+          snapshotDate: args.date,
+          ...token,
+        });
+      }
     }
 
     const sourcePatch = args.sourceMetadata
@@ -119,7 +145,8 @@ export const storeSnapshot = mutation({
       await ctx.db.patch(existingSnapshot._id, {
         executionEndedAt: args.executionEndedAt,
         capturedAt: Date.now(),
-        tokenCount: args.tokens.length,
+        tokenCount: storedTokenCount,
+        captureMode: preserveExistingTokens ? "daily-observed-union" : "rolling-snapshot",
         ...sourcePatch,
       });
     } else {
@@ -127,11 +154,17 @@ export const storeSnapshot = mutation({
         date: args.date,
         executionEndedAt: args.executionEndedAt,
         capturedAt: Date.now(),
-        tokenCount: args.tokens.length,
+        tokenCount: storedTokenCount,
+        captureMode: preserveExistingTokens ? "daily-observed-union" : "rolling-snapshot",
         ...sourcePatch,
       });
     }
 
-    return { stored: args.tokens.length, skipped: false };
+    return {
+      stored: storedTokenCount,
+      incoming: args.tokens.length,
+      preserved: preservedTokenCount,
+      skipped: false,
+    };
   },
 });

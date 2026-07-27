@@ -1,8 +1,4 @@
-import { Box, Chip, Tooltip, Typography } from '@mui/material';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
-import CloudDoneIcon from '@mui/icons-material/CloudDone';
-import HistoryIcon from '@mui/icons-material/History';
-import ReportProblemIcon from '@mui/icons-material/ReportProblem';
+import { Box, Tooltip, Typography } from '@mui/material';
 import type { DataFreshness } from '../lib/types';
 
 interface FreshnessBarProps {
@@ -39,19 +35,24 @@ function formatRelativeTime(value: string | number | null | undefined): string {
   return `${diffDays}d ago`;
 }
 
-function sourceLabel(source: string | null): string {
-  if (source === 'cache') return 'Fresh cache';
-  if (source === 'cache-stale') return 'Stale cache';
-  if (source === 'live') return 'Live fetch';
-  if (source === 'historical') return 'Historical';
-  return 'Data source';
+function formatSnapshotDate(value: string | null): string {
+  if (!value) return '';
+  const date = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
 export function FreshnessBar({ freshness }: FreshnessBarProps) {
   if (!freshness) return null;
 
   const capturedOrFetchedAt = freshness.capturedAt || freshness.fetchedAt;
-  const statusColor = freshness.isStale ? 'warning.main' : 'primary.main';
+  const isHistorical = freshness.source === 'historical';
+  const statusColor = freshness.isStale ? 'warning.main' : isHistorical ? 'text.secondary' : 'primary.main';
+  const statusLabel = freshness.isStale
+    ? 'Older than expected'
+    : isHistorical
+      ? 'Saved snapshot'
+      : 'Up to date';
   const executionDelta = freshness.latestDuneExecutionEndedAt
     && freshness.duneExecutionEndedAt
     && freshness.latestDuneExecutionEndedAt !== freshness.duneExecutionEndedAt
@@ -62,79 +63,47 @@ export function FreshnessBar({ freshness }: FreshnessBarProps) {
     <Box
       sx={{
         mb: 3,
-        p: 1.5,
-        border: 1,
+        py: 1.25,
+        px: 0.25,
+        borderBottom: 1,
         borderColor: 'divider',
-        borderRadius: 1,
-        backgroundColor: 'rgba(24, 24, 27, 0.62)',
         display: 'flex',
-        alignItems: { xs: 'flex-start', md: 'center' },
+        alignItems: { xs: 'flex-start', sm: 'center' },
         justifyContent: 'space-between',
-        gap: 1.5,
-        flexDirection: { xs: 'column', md: 'row' },
+        gap: 1,
+        flexDirection: { xs: 'column', sm: 'row' },
       }}
     >
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
-        <Chip
-          size="small"
-          icon={freshness.isStale ? <ReportProblemIcon /> : <CloudDoneIcon />}
-          label={sourceLabel(freshness.source)}
-          sx={{
-            color: statusColor,
-            borderColor: statusColor,
-            '& .MuiChip-icon': { color: statusColor },
-          }}
-          variant="outlined"
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+        <Box
+          aria-hidden="true"
+          sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: statusColor, flexShrink: 0 }}
         />
-
-        {freshness.snapshotDate && (
-          <Tooltip title="Snapshot date" arrow>
-            <Chip
-              size="small"
-              icon={<HistoryIcon />}
-              label={freshness.snapshotDate}
-              variant="outlined"
-              sx={{ color: 'text.secondary', '& .MuiChip-icon': { color: 'text.secondary' } }}
-            />
-          </Tooltip>
-        )}
-
         <Tooltip title={`Captured ${formatDateTime(capturedOrFetchedAt)}`} arrow>
-          <Chip
-            size="small"
-            icon={<AccessTimeIcon />}
-            label={formatRelativeTime(capturedOrFetchedAt)}
-            variant="outlined"
-            sx={{ color: 'text.secondary', '& .MuiChip-icon': { color: 'text.secondary' } }}
-          />
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            <Box component="span" sx={{ color: statusColor, fontWeight: 600 }}>
+              {statusLabel}
+            </Box>
+            {' · '}{formatRelativeTime(capturedOrFetchedAt)}
+            {freshness.snapshotDate ? ` · ${formatSnapshotDate(freshness.snapshotDate)}` : ''}
+          </Typography>
         </Tooltip>
-
-        {freshness.enrichment && (
-          <Tooltip
-            title={`${freshness.enrichment.failedCount} token enrichments failed`}
-            arrow
-          >
-            <Chip
-              size="small"
-              label={`Dex ${freshness.enrichment.successRate.toFixed(0)}%`}
-              variant="outlined"
-              sx={{ color: 'text.secondary', fontFamily: 'monospace' }}
-            />
-          </Tooltip>
-        )}
       </Box>
 
-      <Box sx={{ minWidth: 0 }}>
+      <Box sx={{ minWidth: 0, textAlign: { xs: 'left', sm: 'right' } }}>
         <Typography
           variant="caption"
           sx={{
             color: 'text.secondary',
             display: 'block',
-            textAlign: { xs: 'left', md: 'right' },
+            fontVariantNumeric: 'tabular-nums',
           }}
         >
-          Dune execution {formatRelativeTime(freshness.duneExecutionEndedAt)}
+          Dune data {formatRelativeTime(freshness.duneExecutionEndedAt)}
           {freshness.totalCount !== null ? ` · ${freshness.totalCount} tokens` : ''}
+          {freshness.enrichment && freshness.enrichment.failedCount > 0
+            ? ` · ${freshness.enrichment.failedCount} missing Dex profiles`
+            : ''}
         </Typography>
         {(freshness.staleReason || executionDelta) && (
           <Typography
@@ -142,14 +111,13 @@ export function FreshnessBar({ freshness }: FreshnessBarProps) {
             sx={{
               color: 'text.secondary',
               display: 'block',
-              textAlign: { xs: 'left', md: 'right' },
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: { xs: 'normal', md: 'nowrap' },
               maxWidth: { md: 520 },
             }}
           >
-            {freshness.staleReason || executionDelta}
+            {freshness.staleReason || 'A newer source result is available.'}
           </Typography>
         )}
       </Box>

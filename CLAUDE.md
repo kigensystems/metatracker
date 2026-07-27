@@ -1,9 +1,67 @@
 # CLAUDE.md
 
+Compatibility copy of the canonical [AGENTS.md](AGENTS.md) instructions. Keep
+both files aligned so Codex and Claude receive the same project guidance.
+
 Quick reference for working in this repo. Deeper docs: [README.md](README.md).
 Forward plan: [PLAN.md](PLAN.md). Past incidents + changelog:
-[docs/HISTORY.md](docs/HISTORY.md). Latest verified production handoff:
-[docs/HANDOFF-2026-07-21.md](docs/HANDOFF-2026-07-21.md).
+[docs/HISTORY.md](docs/HISTORY.md). Authoritative next-session handoff:
+[docs/HANDOFF-2026-07-27.md](docs/HANDOFF-2026-07-27.md).
+
+## Product mission
+
+meta.tracker is a personal research dashboard for a solo memecoin creator. Its
+target cohort is recently graduated tokens that also reached a defensible peak
+market cap of roughly `$100k+`, including tokens that later died. Its job is to
+make a fast, hyper-competitive market understandable without requiring the user
+to watch launches all day. The dashboard should help answer:
+
+1. Which recent tokens both graduated and crossed the `$100k+` threshold?
+2. Which launches performed well, including brief runners that later died?
+3. What names, visuals, niches, and ideas appear to be attracting buyers?
+4. Which tokens are worth opening for deeper manual research?
+5. Eventually, which hours and weekdays offer the strongest conditions for a
+   solo creator to launch?
+
+This is not a general analytics product or an automated trading system. The
+current product is an exploratory dashboard. Generated briefings and tools for
+evaluating the user's own concepts are later possibilities, after the data and
+core UX are trustworthy and polished.
+
+## Success definition and product priorities
+
+- The core inclusion criteria are conjunctive: a token must have graduated
+  **and** reached a defensible peak market cap of roughly `$100k+`. The target
+  dashboard does not need to list every graduate and ask whether it later met
+  the threshold. A short-lived qualifying run still counts; higher peaks are
+  additional upside rather than a different definition of success.
+- Until the available history can prove a true all-time high, call the metric
+  **observed peak market cap**, not ATH. Never manufacture a peak from a single
+  tiny trade or present incomplete coverage as all-time certainty.
+- Volume, liquidity, buy/sell activity, retention, time-to-peak, and longevity
+  are supporting evidence. They help the user judge the strength of an idea or
+  niche, but they do not disqualify a brief `$100k+` runner.
+- Preserve dead runners in exploration and ranking views. Current market cap
+  alone must not erase evidence that a token previously earned attention.
+- Prefer understandable measurements, sortable views, and direct source links
+  over opaque composite scores or automatic narrative classification.
+- Treat on-chain and market data as evidence of **what** happened. Explanations
+  of **why** a token worked are interpretations unless supported by branding,
+  website, social, cultural, or other contextual evidence. Label observation
+  and inference distinctly.
+- Freshness and source timing matter because the meta changes quickly. Display
+  stale, mixed-time, or partial data honestly rather than implying it is live.
+- For future launch-timing analysis, compare outcomes with competition as well
+  as raw market volume. The useful question is when attention relative to the
+  number and quality of competing launches is strongest.
+
+Prioritize work in this order unless the user directs otherwise:
+
+1. Accurate capture of the graduated-and-`$100k+` qualifying cohort.
+2. Clear source semantics and preservation of brief runners.
+3. Fast, polished desktop and mobile exploration UX.
+4. Evidence-based time-of-day and day-of-week analysis.
+5. Generated briefings and assistance evaluating the user's own concepts.
 
 ## What this is
 

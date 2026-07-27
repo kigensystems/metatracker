@@ -2,9 +2,9 @@
 
 Forward-looking plan and active risks. Past incidents and rollout notes are in
 [docs/HISTORY.md](docs/HISTORY.md). Architecture and operating instructions are
-in [README.md](README.md) and [CLAUDE.md](CLAUDE.md). The latest production
+in [README.md](README.md) and [AGENTS.md](AGENTS.md). The authoritative pipeline
 audit and next-session starting point are in
-[docs/HANDOFF-2026-07-21.md](docs/HANDOFF-2026-07-21.md).
+[docs/HANDOFF-2026-07-27.md](docs/HANDOFF-2026-07-27.md).
 
 ## Purpose
 
@@ -19,6 +19,13 @@ This is not a general analytics product. It does not need onboarding, an opaque
 scoring system, automatic narrative classification, or perfect all-time market
 history. The interface should make the important tokens obvious and make it
 easy to open DexScreener, Pump.fun, socials, and the token website for research.
+
+The target cohort is the intersection of tokens that graduated and tokens that
+reached a defensible peak market cap of roughly `$100k+`. The finished dashboard
+does not need to display every graduate. Until the data source can reliably
+recover observed peaks, the current broader feed is only a transitional proxy;
+it must not silently exclude a qualifying runner merely because the token died
+before a later snapshot.
 
 ## What the current app actually receives
 

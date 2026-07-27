@@ -10,12 +10,23 @@ export interface TokenLike {
   volume24h?: unknown;
   liquidity?: unknown;
   marketCap?: unknown;
+  duneMarketCap?: unknown;
+  duneVwapPrice?: unknown;
+  dexMarketCap?: unknown;
+  dexPriceUsd?: unknown;
+  dexFetchedAt?: unknown;
+  dexPairAddress?: unknown;
   priceChange24h?: unknown;
   tradeCount?: unknown;
   createdAt?: unknown;
   graduatedAt?: unknown;
   observedPeakMarketCap?: unknown;
   observedPeakAt?: unknown;
+  observedPeakPriceUsd?: unknown;
+  observedPeakFetchedAt?: unknown;
+  observedPeakSource?: unknown;
+  observedPeakSupply?: unknown;
+  observedPeakSupplySource?: unknown;
   measuredVolumeUsd?: unknown;
   buyCount?: unknown;
   sellCount?: unknown;
@@ -87,10 +98,21 @@ export function toApiToken(stored: TokenLike) {
   const graduatedAt = numberOrNull(stored.graduatedAt);
   const observedPeakMarketCap = numberOrNull(stored.observedPeakMarketCap);
   const observedPeakAt = numberOrNull(stored.observedPeakAt);
+  const observedPeakPriceUsd = numberOrNull(stored.observedPeakPriceUsd);
+  const observedPeakFetchedAt = numberOrNull(stored.observedPeakFetchedAt);
+  const observedPeakSource = stringOrNull(stored.observedPeakSource);
+  const observedPeakSupply = numberOrNull(stored.observedPeakSupply);
+  const observedPeakSupplySource = stringOrNull(stored.observedPeakSupplySource);
   const measuredVolumeUsd = numberOrNull(stored.measuredVolumeUsd);
   const buyCount = numberOrNull(stored.buyCount);
   const sellCount = numberOrNull(stored.sellCount);
   const sourceExecutionEndedAt = stringOrNull(stored.sourceExecutionEndedAt);
+  const duneMarketCap = numberOrNull(stored.duneMarketCap);
+  const duneVwapPrice = numberOrNull(stored.duneVwapPrice);
+  const dexMarketCap = numberOrNull(stored.dexMarketCap);
+  const dexPriceUsd = numberOrNull(stored.dexPriceUsd);
+  const dexFetchedAt = numberOrNull(stored.dexFetchedAt);
+  const dexPairAddress = stringOrNull(stored.dexPairAddress);
 
   return {
     mint,
@@ -113,9 +135,20 @@ export function toApiToken(stored: TokenLike) {
     ...(graduatedAt !== null ? { graduatedAt } : {}),
     ...(observedPeakMarketCap !== null ? { observedPeakMarketCap } : {}),
     ...(observedPeakAt !== null ? { observedPeakAt } : {}),
+    ...(observedPeakPriceUsd !== null ? { observedPeakPriceUsd } : {}),
+    ...(observedPeakFetchedAt !== null ? { observedPeakFetchedAt } : {}),
+    ...(observedPeakSource !== null ? { observedPeakSource } : {}),
+    ...(observedPeakSupply !== null ? { observedPeakSupply } : {}),
+    ...(observedPeakSupplySource !== null ? { observedPeakSupplySource } : {}),
     ...(measuredVolumeUsd !== null ? { measuredVolumeUsd } : {}),
     ...(buyCount !== null ? { buyCount } : {}),
     ...(sellCount !== null ? { sellCount } : {}),
     ...(sourceExecutionEndedAt !== null ? { sourceExecutionEndedAt } : {}),
+    ...(duneMarketCap !== null ? { duneMarketCap } : {}),
+    ...(duneVwapPrice !== null ? { duneVwapPrice } : {}),
+    ...(dexMarketCap !== null ? { dexMarketCap } : {}),
+    ...(dexPriceUsd !== null ? { dexPriceUsd } : {}),
+    ...(dexFetchedAt !== null ? { dexFetchedAt } : {}),
+    ...(dexPairAddress !== null ? { dexPairAddress } : {}),
   };
 }

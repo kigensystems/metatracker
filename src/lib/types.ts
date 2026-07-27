@@ -8,17 +8,28 @@ export interface GraduatedToken {
   image: string | null;
   bannerImage: string | null;
 
-  // DexScreener market data
+  // Legacy display fields. marketCap/priceUsd currently prefer Dune values.
   priceUsd: number | null;
   volume24h: number | null;
   liquidity: number | null;
   marketCap: number | null;
+  duneMarketCap?: number | null;
+  duneVwapPrice?: number | null;
+  dexMarketCap?: number | null;
+  dexPriceUsd?: number | null;
+  dexFetchedAt?: number | null;
+  dexPairAddress?: string | null;
   priceChange24h: number | null;
   tradeCount: number | null;
   createdAt: number | null;
   graduatedAt?: number | null;
   observedPeakMarketCap?: number | null;
   observedPeakAt?: number | null;
+  observedPeakPriceUsd?: number | null;
+  observedPeakFetchedAt?: number | null;
+  observedPeakSource?: string | null;
+  observedPeakSupply?: number | null;
+  observedPeakSupplySource?: string | null;
   measuredVolumeUsd?: number | null;
   buyCount?: number | null;
   sellCount?: number | null;
@@ -38,7 +49,7 @@ export interface GraduatedToken {
   };
 }
 
-export type SortKey = 'volume24h' | 'marketCap' | 'priceChange24h';
+export type SortKey = 'volume24h' | 'marketCap' | 'observedPeakMarketCap' | 'priceChange24h';
 
 export interface DataFreshness {
   source: string | null;

@@ -21,6 +21,7 @@ const headers = {
 interface SnapshotLike {
   capturedAt?: number;
   executionEndedAt?: string;
+  captureMode?: string;
 }
 
 interface MetadataLike {
@@ -95,6 +96,7 @@ function cachedSnapshotResponse({
     latestDuneExecutionEndedAt,
     source,
     snapshotDate,
+    dateMode: snapshot?.captureMode || 'rolling-snapshot',
     isStale,
     staleReason,
   });
@@ -171,7 +173,7 @@ export default async function handler(request: Request, _context: Context) {
         capturedAt: snapshot?.capturedAt || null,
         duneExecutionEndedAt: snapshot?.executionEndedAt || null,
         source: 'historical',
-        dateMode: 'rolling-snapshot',
+        dateMode: snapshot?.captureMode || 'rolling-snapshot',
       });
     }
 
