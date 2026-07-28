@@ -1,20 +1,18 @@
 import { createTheme } from '@mui/material/styles';
 
-// Clean, professional color palette
 const colors = {
-  void: '#09090b',
-  abyss: '#0f0f12',
-  slate: '#18181b',
-  steel: '#27272a',
-  muted: '#52525b',
-  ghost: '#a1a1aa',
-  // Softer, more professional accent colors
-  accent: '#22c55e',      // Muted green (was neon #39ff14)
-  accentMuted: '#16a34a',
-  purple: '#a78bfa',      // Softer purple
-  amber: '#f59e0b',
-  red: '#ef4444',
-  blue: '#3b82f6',
+  void: '#0b0c0e',
+  abyss: '#111315',
+  slate: '#171a1d',
+  steel: '#272b30',
+  muted: '#6f767f',
+  ghost: '#9ba2ab',
+  accent: '#72d38c',
+  accentMuted: '#4eaa68',
+  purple: '#a9a0dc',
+  amber: '#d6a85f',
+  red: '#e06c75',
+  blue: '#72a7d8',
 };
 
 export const theme = createTheme({
@@ -42,18 +40,40 @@ export const theme = createTheme({
       paper: colors.abyss,
     },
     text: {
-      primary: '#fafafa',
+      primary: '#f1f3f4',
       secondary: colors.ghost,
     },
     divider: colors.steel,
   },
   typography: {
-    fontFamily: "'Inter', system-ui, sans-serif",
+    fontFamily: "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    h4: {
+      fontWeight: 650,
+      letterSpacing: '-0.035em',
+    },
+    h6: {
+      fontWeight: 650,
+      letterSpacing: '-0.02em',
+    },
+    button: {
+      textTransform: 'none',
+      fontWeight: 600,
+    },
   },
   shape: {
-    borderRadius: 8,
+    borderRadius: 10,
   },
   components: {
+    MuiCssBaseline: {
+      styleOverrides: {
+        body: {
+          backgroundImage: 'none',
+        },
+        '::selection': {
+          backgroundColor: 'rgba(114, 211, 140, 0.24)',
+        },
+      },
+    },
     MuiChip: {
       styleOverrides: {
         root: {
@@ -94,8 +114,16 @@ export const theme = createTheme({
     MuiAppBar: {
       styleOverrides: {
         root: {
-          backgroundColor: colors.abyss,
-          borderBottom: `1px solid ${colors.steel}`,
+          backgroundColor: 'rgba(11, 12, 14, 0.88)',
+          backdropFilter: 'blur(16px)',
+          borderBottom: `1px solid rgba(255, 255, 255, 0.07)`,
+        },
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          backgroundImage: 'none',
         },
       },
     },

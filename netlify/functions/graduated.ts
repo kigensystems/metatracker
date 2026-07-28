@@ -7,7 +7,7 @@ import {
   fetchLatestDuneData,
   fetchLatestDuneStatus,
 } from './_shared/token-sync';
-import { toApiToken, type TokenLike } from './_shared/api-contract';
+import { toApiToken, withObservedPeaks, type TokenLike } from './_shared/api-contract';
 
 const QUERY_ID = DEFAULT_DUNE_QUERY_ID;
 
@@ -21,6 +21,7 @@ const headers = {
 interface SnapshotLike {
   capturedAt?: number;
   executionEndedAt?: string;
+  captureMode?: string;
 }
 
 interface MetadataLike {
@@ -31,6 +32,27 @@ interface MetadataLike {
 // Get today's date in UTC
 function getTodayUTC(): string {
   return new Date().toISOString().split('T')[0];
+}
+
+/**
+ * Attaches observed peaks by mint. A peak lookup failure degrades to tokens
+ * without peaks rather than failing the whole response.
+ */
+async function attachObservedPeaks(
+  convex: ConvexHttpClient,
+  tokens: TokenLike[],
+): Promise<TokenLike[]> {
+  const mints = tokens
+    .map((token) => token.mint)
+    .filter((mint): mint is string => typeof mint === 'string' && mint.length > 0);
+  if (mints.length === 0) return tokens;
+
+  try {
+    return withObservedPeaks(tokens, await convex.query(api.observedPeaks.byMints, { mints }));
+  } catch (error) {
+    console.warn('Observed peak lookup failed; serving tokens without peaks:', error);
+    return tokens;
+  }
 }
 
 function json(body: unknown, status = 200) {
@@ -95,6 +117,7 @@ function cachedSnapshotResponse({
     latestDuneExecutionEndedAt,
     source,
     snapshotDate,
+    dateMode: snapshot?.captureMode || 'rolling-snapshot',
     isStale,
     staleReason,
   });
@@ -159,10 +182,11 @@ export default async function handler(request: Request, _context: Context) {
         return json({ error: 'date parameter required for historical mode' }, 400);
       }
 
-      const [tokens, snapshot] = await Promise.all([
+      const [storedTokens, snapshot] = await Promise.all([
         convex.query(api.graduatedTokens.byDate, { date }),
         convex.query(api.dailySnapshots.byDate, { date }),
       ]);
+      const tokens = await attachObservedPeaks(convex, storedTokens);
 
       return json({
         tokens: tokens.map(toApiToken),
@@ -171,7 +195,7 @@ export default async function handler(request: Request, _context: Context) {
         capturedAt: snapshot?.capturedAt || null,
         duneExecutionEndedAt: snapshot?.executionEndedAt || null,
         source: 'historical',
-        dateMode: 'rolling-snapshot',
+        dateMode: snapshot?.captureMode || 'rolling-snapshot',
       });
     }
 
@@ -187,20 +211,28 @@ export default async function handler(request: Request, _context: Context) {
       return json({ error: 'force refresh requires admin authorization' }, 403);
     }
 
-    const [metadata, cached, snapshot] = await Promise.all([
+    const [metadata, storedToday, snapshot] = await Promise.all([
       convex.query(api.duneMetadata.get, { queryId: QUERY_ID }),
       convex.query(api.graduatedTokens.byDate, { date: today }),
       convex.query(api.dailySnapshots.byDate, { date: today }),
     ]);
+    // Joined lazily: the peak lookup is a Convex round trip, and an authorized
+    // force refresh discards this branch entirely and refetches from Dune.
+    const serveCached = async (
+      state: { source: 'cache' | 'cache-stale'; isStale: boolean; staleReason?: string;
+               latestDuneExecutionEndedAt?: string },
+    ) => cachedSnapshotResponse({
+      tokens: await attachObservedPeaks(convex, storedToday),
+      snapshot,
+      metadata,
+      snapshotDate: today,
+      ...state,
+    });
 
     if (!duneApiKey) {
-      if (cached.length > 0) {
+      if (storedToday.length > 0) {
         console.log('DUNE_API_KEY not configured, serving cached snapshot');
-        return cachedSnapshotResponse({
-          tokens: cached,
-          snapshot,
-          metadata,
-          snapshotDate: today,
+        return serveCached({
           source: 'cache-stale',
           isStale: true,
           staleReason: 'DUNE_API_KEY not configured',
@@ -214,13 +246,9 @@ export default async function handler(request: Request, _context: Context) {
     try {
       duneStatus = await fetchLatestDuneStatus(duneApiKey, QUERY_ID);
     } catch (error) {
-      if (cached.length > 0) {
+      if (storedToday.length > 0) {
         console.log('Dune freshness check failed, serving cached snapshot');
-        return cachedSnapshotResponse({
-          tokens: cached,
-          snapshot,
-          metadata,
-          snapshotDate: today,
+        return serveCached({
           source: 'cache-stale',
           isStale: true,
           staleReason: `Dune freshness check failed: ${String(error)}`,
@@ -233,13 +261,9 @@ export default async function handler(request: Request, _context: Context) {
     const cachedExecutionEndedAt = snapshot?.executionEndedAt || metadata?.lastExecutionEndedAt || null;
     const cacheIsFresh = cachedExecutionEndedAt === duneStatus.executionEndedAt;
 
-    if (!forceAuthorized && cached.length > 0) {
+    if (!forceAuthorized && storedToday.length > 0) {
       console.log(cacheIsFresh ? 'Serving from cache' : 'Serving stale cache');
-      return cachedSnapshotResponse({
-        tokens: cached,
-        snapshot,
-        metadata,
-        snapshotDate: today,
+      return serveCached({
         source: cacheIsFresh ? 'cache' : 'cache-stale',
         isStale: !cacheIsFresh,
         latestDuneExecutionEndedAt: duneStatus.executionEndedAt,
@@ -256,7 +280,7 @@ export default async function handler(request: Request, _context: Context) {
     }
 
     return liveDataResponse({
-      tokens: enrichedTokens,
+      tokens: await attachObservedPeaks(convex, enrichedTokens),
       totalCount: duneResult.tokens.length,
       executionEndedAt: duneResult.executionEndedAt,
       snapshotDate: today,

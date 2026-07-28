@@ -6,7 +6,6 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { TokenRow, ROW_GRID } from './TokenRow';
 import type { GraduatedToken, SortKey } from '../lib/types';
 
-// Columns hidden on xs (24h % and links) share this responsive display value.
 const HIDE_ON_XS = { xs: 'none', sm: 'flex' } as const;
 
 interface TokenListProps {
@@ -126,18 +125,20 @@ export function TokenList({
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-          Showing{' '}
-          <Box component="span" sx={{ color: 'text.primary', fontWeight: 600, fontFamily: 'monospace' }}>
-            {startIndex}–{endIndex}
-          </Box>{' '}
-          of{' '}
-          <Box component="span" sx={{ color: 'text.primary', fontWeight: 600, fontFamily: 'monospace' }}>
-            {totalCount}
-          </Box>{' '}
-          tokens
-        </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 2, mb: 1.5 }}>
+        <Box>
+          <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+            <Typography variant="h6" sx={{ fontSize: '1rem' }}>
+              Tokens
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>
+              {totalPages > 1 ? `${startIndex}–${endIndex} of ` : ''}{totalCount}
+            </Typography>
+          </Box>
+          <Typography variant="caption" sx={{ color: 'text.secondary', display: { xs: 'none', sm: 'block' }, mt: 0.25 }}>
+            Activity from DexScreener · market cap from Dune · observed peak from Solana Tracker
+          </Typography>
+        </Box>
 
         {totalPages > 1 && <Pagination page={page} totalPages={totalPages} onPageChange={onPageChange} />}
       </Box>
@@ -147,7 +148,7 @@ export function TokenList({
         sx={{
           border: 1,
           borderColor: 'divider',
-          borderRadius: 2,
+          borderRadius: 1.5,
           overflow: 'hidden',
         }}
       >
@@ -155,41 +156,49 @@ export function TokenList({
         <Box
           sx={{
             ...ROW_GRID,
-            px: 2.5,
-            py: 1.5,
+            px: { xs: 1.25, sm: 2 },
+            py: 1.2,
             borderBottom: 1,
             borderColor: 'divider',
-            backgroundColor: 'action.hover',
+            backgroundColor: 'rgba(255, 255, 255, 0.025)',
           }}
         >
           <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-            #
-          </Typography>
-          <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
             Token
           </Typography>
-          <SortHeader label="24h Vol" column="volume24h" activeKey={sortKey} dir={sortDir} onSort={onSort} />
-          <SortHeader label="Mkt Cap" column="marketCap" activeKey={sortKey} dir={sortDir} onSort={onSort} />
+          <SortHeader label="24h volume" column="volume24h" activeKey={sortKey} dir={sortDir} onSort={onSort} />
           <SortHeader
-            label="24h %"
+            label="Peak MC"
+            column="observedPeakMarketCap"
+            activeKey={sortKey}
+            dir={sortDir}
+            onSort={onSort}
+          />
+          <SortHeader
+            label="Dune MC"
+            column="marketCap"
+            activeKey={sortKey}
+            dir={sortDir}
+            onSort={onSort}
+            hideOnXs
+          />
+          <SortHeader
+            label="24h change"
             column="priceChange24h"
             activeKey={sortKey}
             dir={sortDir}
             onSort={onSort}
             hideOnXs
           />
-          <Typography variant="caption" sx={{ display: HIDE_ON_XS, color: 'text.secondary', fontWeight: 600, justifyContent: 'flex-end' }}>
-            Links
-          </Typography>
+          <Box />
         </Box>
 
         {/* Table body */}
         <Box>
-          {tokens.map((token, index) => (
+          {tokens.map((token) => (
             <TokenRow
               key={token.mint}
               token={token}
-              index={startIndex + index - 1}
               onSelect={onTokenSelect}
             />
           ))}

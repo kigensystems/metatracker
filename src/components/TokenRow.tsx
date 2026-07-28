@@ -1,42 +1,29 @@
 import { memo, useState } from 'react';
-import { Box, Typography, IconButton, Avatar } from '@mui/material';
-import LanguageIcon from '@mui/icons-material/Language';
+import { Box, Typography, Avatar } from '@mui/material';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import type { GraduatedToken } from '../lib/types';
-import { safeExternalUrl } from '../lib/external-url';
-import { changeColor, formatAge, formatDateTime, formatPercent, formatUsd } from '../lib/format';
-import { XIcon } from './icons';
+import { changeColor, formatAge, formatPercent, formatUsd } from '../lib/format';
 
 // Shared column template so the header and every row stay aligned.
-// Columns: rank · token · 24h volume · market cap · 24h % · links
-// On xs the last two (24h % and links) are hidden, leaving four tracks.
+// Mobile: token · 24h volume · observed peak · detail affordance.
+// Desktop adds Dune market cap and 24h change.
 export const ROW_GRID = {
   display: 'grid',
   gridTemplateColumns: {
-    xs: '32px minmax(0, 1fr) 84px 84px',
-    sm: '40px minmax(0, 1fr) 110px 110px 92px 100px',
+    xs: 'minmax(0, 1fr) 78px 72px 18px',
+    sm: 'minmax(240px, 1.7fr) 110px 110px 110px 100px 24px',
   },
-  columnGap: { xs: 1, sm: 2 },
+  columnGap: { xs: 0.75, sm: 2 },
   alignItems: 'center',
 } as const;
 
 interface TokenRowProps {
   token: GraduatedToken;
-  index: number;
   onSelect: (token: GraduatedToken) => void;
 }
 
-export const TokenRow = memo(function TokenRow({ token, index, onSelect }: TokenRowProps) {
+export const TokenRow = memo(function TokenRow({ token, onSelect }: TokenRowProps) {
   const [imgError, setImgError] = useState(false);
-
-  const handleLinkClick = (e: React.MouseEvent, url: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const safeUrl = safeExternalUrl(url);
-    if (!safeUrl) return;
-
-    const opened = window.open(safeUrl, '_blank', 'noopener,noreferrer');
-    if (opened) opened.opener = null;
-  };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -46,9 +33,6 @@ export const TokenRow = memo(function TokenRow({ token, index, onSelect }: Token
   };
 
   const change = token.priceChange24h;
-  const website = safeExternalUrl(token.website);
-  const twitter = safeExternalUrl(token.twitter);
-  const hasSocials = website || twitter;
 
   return (
     <Box
@@ -59,8 +43,8 @@ export const TokenRow = memo(function TokenRow({ token, index, onSelect }: Token
       onKeyDown={handleKeyDown}
       sx={{
         ...ROW_GRID,
-        px: 2.5,
-        py: 1.5,
+        px: { xs: 1.25, sm: 2 },
+        py: 1.35,
         width: '100%',
         textAlign: 'left',
         cursor: 'pointer',
@@ -68,16 +52,11 @@ export const TokenRow = memo(function TokenRow({ token, index, onSelect }: Token
         borderBottom: 1,
         borderColor: 'divider',
         transition: 'background-color 0.15s',
-        '&:hover': { backgroundColor: 'action.hover' },
+        '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.035)' },
+        '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 },
         '&:last-child': { borderBottom: 0 },
       }}
     >
-      {/* Row number */}
-      <Typography variant="body2" sx={{ color: 'text.secondary', fontFamily: 'monospace', fontWeight: 500 }}>
-        {index + 1}
-      </Typography>
-
-      {/* Token: avatar + name/symbol/age */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
         {token.image && !imgError ? (
           <Avatar
@@ -85,19 +64,19 @@ export const TokenRow = memo(function TokenRow({ token, index, onSelect }: Token
             alt={token.symbol}
             variant="rounded"
             onError={() => setImgError(true)}
-            sx={{ width: 36, height: 36, flexShrink: 0, border: 1, borderColor: 'divider' }}
+            sx={{ width: 40, height: 40, flexShrink: 0, border: 1, borderColor: 'divider', borderRadius: 1.25 }}
           />
         ) : (
           <Avatar
             variant="rounded"
             sx={{
-              width: 36,
-              height: 36,
+              width: 40,
+              height: 40,
               flexShrink: 0,
               bgcolor: 'action.hover',
               border: 1,
               borderColor: 'divider',
-              fontSize: '0.7rem',
+              fontSize: '0.72rem',
               fontWeight: 600,
               color: 'text.secondary',
             }}
@@ -109,7 +88,8 @@ export const TokenRow = memo(function TokenRow({ token, index, onSelect }: Token
           <Typography
             variant="body2"
             sx={{
-              fontWeight: 500,
+              fontWeight: 600,
+              fontSize: '0.875rem',
               color: 'text.primary',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -118,13 +98,12 @@ export const TokenRow = memo(function TokenRow({ token, index, onSelect }: Token
           >
             {token.name || 'Unknown'}
           </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.125, minWidth: 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.65, mt: 0.2, minWidth: 0 }}>
             <Typography
               variant="caption"
               sx={{
-                color: 'warning.main',
-                fontFamily: 'monospace',
-                fontWeight: 500,
+                color: 'text.secondary',
+                fontWeight: 550,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
@@ -133,45 +112,48 @@ export const TokenRow = memo(function TokenRow({ token, index, onSelect }: Token
               ${token.symbol}
             </Typography>
             {token.createdAt && (
-              <>
-                <Typography variant="caption" sx={{ color: 'text.secondary', flexShrink: 0 }}>
-                  · {formatAge(token.createdAt)}
-                </Typography>
-                <Typography
-                  variant="caption"
-                  sx={{ display: { xs: 'none', md: 'inline' }, color: 'text.secondary', flexShrink: 0, whiteSpace: 'nowrap' }}
-                >
-                  · {formatDateTime(token.createdAt)}
-                </Typography>
-              </>
+              <Typography variant="caption" sx={{ color: 'text.secondary', flexShrink: 0 }}>
+                · {formatAge(token.createdAt)} old
+              </Typography>
             )}
           </Box>
         </Box>
       </Box>
 
-      {/* 24h volume — the headline metric */}
       <Typography
         variant="body2"
-        sx={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: 'text.primary' }}
+        sx={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 650, color: 'text.primary', letterSpacing: '-0.015em' }}
       >
         {formatUsd(token.volume24h)}
       </Typography>
 
-      {/* Market cap */}
       <Typography
         variant="body2"
-        sx={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 500, color: 'text.primary' }}
+        sx={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 650, color: 'text.primary', letterSpacing: '-0.015em' }}
       >
-        {formatUsd(token.marketCap)}
+        {formatUsd(token.observedPeakMarketCap)}
       </Typography>
 
-      {/* 24h change */}
       <Typography
         variant="body2"
         sx={{
           display: { xs: 'none', sm: 'block' },
           textAlign: 'right',
-          fontFamily: 'monospace',
+          fontVariantNumeric: 'tabular-nums',
+          fontWeight: 500,
+          color: 'text.secondary',
+          letterSpacing: '-0.015em',
+        }}
+      >
+        {formatUsd(token.marketCap)}
+      </Typography>
+
+      <Typography
+        variant="body2"
+        sx={{
+          display: { xs: 'none', sm: 'block' },
+          textAlign: 'right',
+          fontVariantNumeric: 'tabular-nums',
           fontWeight: 600,
           color: changeColor(change),
         }}
@@ -179,36 +161,8 @@ export const TokenRow = memo(function TokenRow({ token, index, onSelect }: Token
         {formatPercent(change)}
       </Typography>
 
-      {/* Socials */}
-      <Box sx={{ display: { xs: 'none', sm: 'flex' }, justifyContent: 'flex-end', gap: 0.5 }}>
-        {hasSocials ? (
-          <>
-            {website && (
-              <IconButton
-                size="small"
-                onClick={(e) => handleLinkClick(e, website)}
-                aria-label="Website"
-                sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary', backgroundColor: 'action.hover' } }}
-              >
-                <LanguageIcon sx={{ fontSize: 18 }} />
-              </IconButton>
-            )}
-            {twitter && (
-              <IconButton
-                size="small"
-                onClick={(e) => handleLinkClick(e, twitter)}
-                aria-label="X"
-                sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary', backgroundColor: 'action.hover' } }}
-              >
-                <XIcon size={16} />
-              </IconButton>
-            )}
-          </>
-        ) : (
-          <Typography variant="caption" sx={{ color: 'text.disabled' }}>
-            —
-          </Typography>
-        )}
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', color: 'text.disabled' }}>
+        <ChevronRightIcon sx={{ fontSize: 18 }} />
       </Box>
     </Box>
   );

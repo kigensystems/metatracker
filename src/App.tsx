@@ -17,6 +17,7 @@ interface AvailableDate {
   date: string;
   tokenCount: number;
   capturedAt: number;
+  captureMode?: string;
 }
 
 interface CachedData {
@@ -211,8 +212,17 @@ function App() {
           loading={loading}
         />
 
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
-          <div className="pt-6">
+        <main className="max-w-[1200px] mx-auto px-4 sm:px-6 pb-16">
+          <div className="pt-8 sm:pt-12 pb-6">
+            <h2 className="text-[1.75rem] sm:text-[2.15rem] leading-tight font-semibold tracking-[-0.035em] text-[#f1f3f4]">
+              Recent graduates
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm sm:text-[0.95rem] leading-6 text-[#9ba2ab]">
+              Track every recently graduated token observed across the source snapshots. Open any token for sources, timing, and research links.
+            </p>
+          </div>
+
+          <div>
             <DatePicker
               selectedDate={selectedDate}
               availableDates={availableDates}

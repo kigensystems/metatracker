@@ -20,6 +20,33 @@ export interface ReplacementInput {
   minExistingTokenRetentionRatio?: number;
 }
 
+export interface SnapshotMintLike {
+  mint: string;
+}
+
+export function getSnapshotMergeStats(
+  existing: readonly SnapshotMintLike[],
+  incoming: readonly SnapshotMintLike[],
+) {
+  const existingMints = new Set(existing.map((token) => token.mint));
+  const incomingMints = new Set(incoming.map((token) => token.mint));
+
+  if (incomingMints.size !== incoming.length) {
+    throw new Error('Refusing snapshot input with duplicate token mints.');
+  }
+
+  let preservedCount = 0;
+  for (const mint of existingMints) {
+    if (!incomingMints.has(mint)) preservedCount += 1;
+  }
+
+  return {
+    incomingCount: incomingMints.size,
+    preservedCount,
+    finalCount: incomingMints.size + preservedCount,
+  };
+}
+
 export function assertSourceExecutionNotOlder(incoming: string, existing?: string) {
   const incomingTime = Date.parse(incoming);
   if (!Number.isFinite(incomingTime)) {

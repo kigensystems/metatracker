@@ -38,6 +38,7 @@ export const markSuccess = mutation({
     sourceQueryKind: v.optional(v.string()),
     snapshotDate: v.string(),
     tokenCount: v.number(),
+    snapshotTokenCount: v.optional(v.number()),
     enrichedCount: v.number(),
     enrichmentFailedCount: v.number(),
     enrichmentSuccessRate: v.number(),

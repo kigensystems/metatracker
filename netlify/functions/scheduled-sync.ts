@@ -118,7 +118,7 @@ export default async function handler(_request: Request, _context: Context) {
     }
 
     console.log("Storing in Convex...");
-    await runWithRetry(
+    const storeResult = await runWithRetry(
       "Store Convex snapshot",
       () => convex.mutation(api.graduatedTokens.storeSnapshot, {
         date: today,
@@ -126,9 +126,10 @@ export default async function handler(_request: Request, _context: Context) {
         tokens: enrichedTokens,
         sourceMetadata,
         replaceExisting: true,
-        minExistingTokenRetentionRatio: 0.5,
+        preserveExistingTokens: true,
       }),
     );
+    const preservedTokenCount = "preserved" in storeResult ? storeResult.preserved : 0;
 
     await runWithRetry(
       "Update Dune metadata",
@@ -161,6 +162,7 @@ export default async function handler(_request: Request, _context: Context) {
           sourceQueryKind: sourceMetadata.sourceQueryKind,
           snapshotDate: today,
           tokenCount: duneResult.tokens.length,
+          snapshotTokenCount: storeResult.stored,
           enrichedCount: enrichedTokens.length,
           enrichmentFailedCount: failedEnrichments.length,
           enrichmentSuccessRate: enrichmentRate,
@@ -176,6 +178,8 @@ export default async function handler(_request: Request, _context: Context) {
       success: true,
       date: today,
       tokenCount: enrichedTokens.length,
+      snapshotTokenCount: storeResult.stored,
+      preservedTokenCount,
       executionEndedAt: duneResult.executionEndedAt,
       retryCount,
       sourceMetadata,

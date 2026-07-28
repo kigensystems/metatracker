@@ -1,9 +1,4 @@
-import type { ReactNode } from 'react';
 import { Box, Typography } from '@mui/material';
-import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
-import TrendingUpIcon from '@mui/icons-material/TrendingUp';
-import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
-import BarChartIcon from '@mui/icons-material/BarChart';
 import type { GraduatedToken } from '../lib/types';
 import { changeColor, formatPercent, formatUsd } from '../lib/format';
 
@@ -17,8 +12,6 @@ interface MetaSummaryProps {
 }
 
 interface CardProps {
-  icon: ReactNode;
-  iconColor: string;
   label: string;
   value: string;
   valueColor?: string;
@@ -26,7 +19,7 @@ interface CardProps {
   onClick?: () => void;
 }
 
-function SummaryCard({ icon, iconColor, label, value, valueColor, sub, onClick }: CardProps) {
+function SummaryCard({ label, value, valueColor, sub, onClick }: CardProps) {
   const interactive = Boolean(onClick);
   return (
     <Box
@@ -44,32 +37,31 @@ function SummaryCard({ icon, iconColor, label, value, valueColor, sub, onClick }
           : undefined
       }
       sx={{
-        p: 1.75,
-        border: 1,
+        p: { xs: 1.5, sm: 2 },
         borderColor: 'divider',
-        borderRadius: 2,
-        backgroundColor: 'background.paper',
         minWidth: 0,
         cursor: interactive ? 'pointer' : 'default',
-        transition: 'border-color 0.15s, background-color 0.15s',
+        transition: 'background-color 0.15s',
+        '&:nth-of-type(odd)': { borderRight: { xs: 1, md: 0 } },
+        '&:nth-of-type(-n+2)': { borderBottom: { xs: 1, md: 0 } },
+        '&:not(:last-of-type)': { borderRight: { md: 1 } },
         ...(interactive && {
-          '&:hover': { borderColor: 'text.disabled', backgroundColor: 'action.hover' },
+          '&:hover': { backgroundColor: 'action.hover' },
         }),
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 1 }}>
-        <Box sx={{ color: iconColor, display: 'flex' }}>{icon}</Box>
-        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-          {label}
-        </Typography>
-      </Box>
+      <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+        {label}
+      </Typography>
       <Typography
         sx={{
-          fontFamily: 'monospace',
-          fontWeight: 700,
-          fontSize: '1.25rem',
+          fontWeight: 650,
+          fontSize: { xs: '1.1rem', sm: '1.25rem' },
           lineHeight: 1.1,
           color: valueColor || 'text.primary',
+          fontVariantNumeric: 'tabular-nums',
+          letterSpacing: '-0.025em',
+          mt: 0.75,
         }}
       >
         {value}
@@ -79,7 +71,7 @@ function SummaryCard({ icon, iconColor, label, value, valueColor, sub, onClick }
         sx={{
           color: 'text.secondary',
           display: 'block',
-          mt: 0.5,
+          mt: 0.55,
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
@@ -99,50 +91,54 @@ export function MetaSummary({
   tokenCount,
   onSelect,
 }: MetaSummaryProps) {
-  const iconSx = { fontSize: 18 };
   const gainerValue = topGainer?.priceChange24h;
 
   return (
-    <Box
-      sx={{
-        display: 'grid',
-        gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' },
-        gap: 1.5,
-        mb: 3,
-      }}
-    >
-      <SummaryCard
-        icon={<LocalFireDepartmentIcon sx={iconSx} />}
-        iconColor="warning.main"
-        label="Top volume"
-        value={formatUsd(topVolume?.volume24h)}
-        sub={topVolume?.name || '—'}
-        onClick={topVolume ? () => onSelect(topVolume) : undefined}
-      />
-      <SummaryCard
-        icon={<TrendingUpIcon sx={iconSx} />}
-        iconColor="primary.main"
-        label="Top gainer (24h)"
-        value={formatPercent(gainerValue)}
-        valueColor={changeColor(gainerValue)}
-        sub={topGainer?.name || '—'}
-        onClick={topGainer ? () => onSelect(topGainer) : undefined}
-      />
-      <SummaryCard
-        icon={<EmojiEventsIcon sx={iconSx} />}
-        iconColor="secondary.main"
-        label="Top market cap"
-        value={formatUsd(topMarketCap?.marketCap)}
-        sub={topMarketCap?.name || '—'}
-        onClick={topMarketCap ? () => onSelect(topMarketCap) : undefined}
-      />
-      <SummaryCard
-        icon={<BarChartIcon sx={iconSx} />}
-        iconColor="info.main"
-        label="Total 24h volume"
-        value={formatUsd(totalVolume)}
-        sub={`across ${tokenCount} launch${tokenCount === 1 ? '' : 'es'}`}
-      />
+    <Box sx={{ mb: 4 }}>
+      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 1.25 }}>
+        <Typography variant="h6" sx={{ fontSize: '1rem' }}>
+          Snapshot overview
+        </Typography>
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+          Quick read
+        </Typography>
+      </Box>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' },
+          border: 1,
+          borderColor: 'divider',
+          borderRadius: 1.5,
+          overflow: 'hidden',
+          backgroundColor: 'background.paper',
+        }}
+      >
+        <SummaryCard
+          label="Most active"
+          value={formatUsd(topVolume?.volume24h)}
+          sub={topVolume?.name || '—'}
+          onClick={topVolume ? () => onSelect(topVolume) : undefined}
+        />
+        <SummaryCard
+          label="Biggest 24h mover"
+          value={formatPercent(gainerValue)}
+          valueColor={changeColor(gainerValue)}
+          sub={topGainer?.name || '—'}
+          onClick={topGainer ? () => onSelect(topGainer) : undefined}
+        />
+        <SummaryCard
+          label="Largest Dune estimate"
+          value={formatUsd(topMarketCap?.marketCap)}
+          sub={topMarketCap?.name || '—'}
+          onClick={topMarketCap ? () => onSelect(topMarketCap) : undefined}
+        />
+        <SummaryCard
+          label="Combined Dex volume"
+          value={formatUsd(totalVolume)}
+          sub={`${tokenCount} launch${tokenCount === 1 ? '' : 'es'}`}
+        />
+      </Box>
     </Box>
   );
 }

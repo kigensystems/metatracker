@@ -1,17 +1,13 @@
-import { useState, useEffect } from 'react';
 import {
   AppBar,
   Toolbar,
   IconButton,
   Tooltip,
-  Chip,
   Box,
   Typography,
   LinearProgress,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
-import SyncIcon from '@mui/icons-material/Sync';
 
 interface HeaderProps {
   lastUpdated: Date | null;
@@ -24,30 +20,6 @@ export function Header({
   onRefresh,
   loading,
 }: HeaderProps) {
-  const [timeUntilSync, setTimeUntilSync] = useState('');
-
-  useEffect(() => {
-    const calculateTimeUntilSync = () => {
-      const slotMs = 2 * 60 * 60 * 1000;
-      const now = Date.now();
-      const nextSlot = Math.ceil(now / slotMs) * slotMs;
-      const minutesUntil = Math.max(0, Math.round((nextSlot - now) / 60000));
-      const hours = Math.floor(minutesUntil / 60);
-      const minutes = minutesUntil % 60;
-
-      if (minutesUntil <= 1) return 'Soon';
-      if (hours === 0) return `${minutes}m`;
-      return `${hours}h ${minutes}m`;
-    };
-
-    setTimeUntilSync(calculateTimeUntilSync());
-    const interval = setInterval(() => {
-      setTimeUntilSync(calculateTimeUntilSync());
-    }, 60000);
-
-    return () => clearInterval(interval);
-  }, []);
-
   const formatRelativeTime = (date: Date | null): string => {
     if (!date) return '';
     const now = new Date();
@@ -62,85 +34,68 @@ export function Header({
 
   return (
     <AppBar position="sticky" elevation={0}>
-      <Toolbar sx={{ justifyContent: 'space-between', minHeight: { xs: 56, sm: 64 } }}>
-        {/* Logo */}
+      <Toolbar
+        disableGutters
+        sx={{
+          justifyContent: 'space-between',
+          minHeight: { xs: 58, sm: 66 },
+          width: '100%',
+          maxWidth: 1200,
+          mx: 'auto',
+          px: { xs: 2, sm: 3 },
+        }}
+      >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <img
             src="/logo.png"
             alt="meta.tracker"
-            style={{ width: 32, height: 32, imageRendering: 'pixelated' }}
+            style={{ width: 30, height: 30, imageRendering: 'pixelated' }}
           />
           <Typography
             component="h1"
             sx={{
-              fontFamily: "'Inter', sans-serif",
-              fontSize: { xs: '14px', sm: '16px' },
-              fontWeight: 600,
-              letterSpacing: '-0.02em',
+              fontSize: '0.95rem',
+              fontWeight: 650,
+              letterSpacing: '-0.025em',
             }}
           >
-            <span style={{ color: '#fafafa' }}>meta</span>
-            <span style={{ color: '#22c55e' }}>.tracker</span>
+            <span style={{ color: '#f1f3f4' }}>meta</span>
+            <span style={{ color: '#72d38c' }}>.tracker</span>
           </Typography>
         </Box>
 
-        {/* Right side - status indicators */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          {/* Last updated */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 1.5 } }}>
           {lastUpdated && (
-            <Tooltip title="Last updated" arrow>
-              <Chip
-                icon={<AccessTimeIcon sx={{ fontSize: 14 }} />}
-                label={formatRelativeTime(lastUpdated)}
-                size="small"
-                variant="outlined"
-                sx={{
-                  display: { xs: 'none', sm: 'flex' },
-                  borderColor: 'divider',
-                  color: 'text.secondary',
-                  '& .MuiChip-icon': { color: 'text.secondary' },
-                }}
-              />
-            </Tooltip>
-          )}
-
-          {/* Next sync countdown */}
-          <Tooltip title="Next scheduled sync (every 2h, UTC)" arrow>
-            <Chip
-              icon={<SyncIcon sx={{ fontSize: 14 }} />}
-              label={timeUntilSync}
-              size="small"
-              variant="outlined"
+            <Typography
+              variant="caption"
               sx={{
                 display: { xs: 'none', sm: 'flex' },
-                borderColor: 'divider',
                 color: 'text.secondary',
-                '& .MuiChip-icon': { color: 'text.secondary' },
-                '& .MuiChip-label': { fontFamily: 'monospace' },
               }}
-            />
-          </Tooltip>
+            >
+              Updated {formatRelativeTime(lastUpdated)}
+            </Typography>
+          )}
 
-          {/* Refresh button */}
-          <Tooltip title="Refresh" arrow>
+          <Tooltip title="Refresh data" arrow>
             <span>
               <IconButton
                 onClick={onRefresh}
                 disabled={loading}
                 size="small"
                 sx={{
-                  border: 1,
-                  borderColor: 'divider',
-                  borderRadius: 1.5,
+                  width: 36,
+                  height: 36,
+                  borderRadius: '50%',
                   '&:hover': {
-                    borderColor: 'text.secondary',
+                    backgroundColor: 'action.hover',
                   },
                 }}
               >
                 <RefreshIcon
                   sx={{
                     fontSize: 18,
-                    color: 'text.secondary',
+                    color: loading ? 'text.disabled' : 'text.secondary',
                     animation: loading ? 'spin 1s linear infinite' : 'none',
                     '@keyframes spin': {
                       from: { transform: 'rotate(0deg)' },
@@ -154,7 +109,6 @@ export function Header({
         </Box>
       </Toolbar>
 
-      {/* Loading bar */}
       {loading && (
         <LinearProgress
           sx={{

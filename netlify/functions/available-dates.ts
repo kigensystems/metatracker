@@ -33,6 +33,7 @@ export default async function handler(request: Request, _context: Context) {
           date: s.date,
           tokenCount: s.tokenCount,
           capturedAt: s.capturedAt,
+          captureMode: s.captureMode || 'rolling-snapshot',
         })),
       }),
       { status: 200, headers }

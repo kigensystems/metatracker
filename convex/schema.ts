@@ -22,6 +22,7 @@ export default defineSchema({
     executionEndedAt: v.string(),
     capturedAt: v.number(),
     tokenCount: v.number(),
+    captureMode: v.optional(v.string()),
     duneQueryId: v.optional(v.string()),
     duneExecutionId: v.optional(v.string()),
     duneState: v.optional(v.string()),
@@ -57,6 +58,7 @@ export default defineSchema({
     windowEnd: v.optional(v.string()),
     snapshotDate: v.optional(v.string()),
     tokenCount: v.optional(v.number()),
+    snapshotTokenCount: v.optional(v.number()),
     enrichedCount: v.optional(v.number()),
     enrichmentFailedCount: v.optional(v.number()),
     enrichmentSuccessRate: v.optional(v.number()),
@@ -69,4 +71,23 @@ export default defineSchema({
   graduatedTokens: defineTable(storedTokenValidator)
     .index("by_date", ["snapshotDate"])
     .index("by_mint", ["mint"]),
+
+  // One completed observed-peak reading per mint, taken after the token's run
+  // is over. This is the only home for peak data; token rows never store it.
+  observedPeaks: defineTable({
+    mint: v.string(),
+    status: v.string(), // "ok", "empty", or "failed"
+    peakMarketCapUsd: v.optional(v.number()),
+    peakAt: v.optional(v.number()),
+    // The window actually examined, so the UI can state coverage honestly
+    // instead of implying all-time.
+    windowFrom: v.number(),
+    windowTo: v.number(),
+    candleInterval: v.string(),
+    candleCount: v.optional(v.number()),
+    source: v.string(),
+    fetchedAt: v.number(),
+    attempts: v.number(),
+    lastError: v.optional(v.string()),
+  }).index("by_mint", ["mint"]),
 });
