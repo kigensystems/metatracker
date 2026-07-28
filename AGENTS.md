@@ -6,7 +6,7 @@ Canonical instructions for agents working in this repository. Keep
 Quick reference for working in this repo. Deeper docs: [README.md](README.md).
 Forward plan: [PLAN.md](PLAN.md). Past incidents + changelog:
 [docs/HISTORY.md](docs/HISTORY.md). Authoritative next-session handoff:
-[docs/HANDOFF-2026-07-27.md](docs/HANDOFF-2026-07-27.md).
+[docs/HANDOFF-2026-07-28.md](docs/HANDOFF-2026-07-28.md).
 
 ## Product mission
 
