@@ -1,36 +1,19 @@
-import {
-  AppBar,
-  Toolbar,
-  IconButton,
-  Tooltip,
-  Box,
-  Typography,
-  LinearProgress,
-} from '@mui/material';
+import { AppBar, Box, IconButton, LinearProgress, Toolbar, Tooltip, Typography } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import type { DataFreshness } from '../lib/types';
+import { colors, HEADER_HEIGHT } from '../lib/theme';
+import { NextRuns } from './NextRuns';
 
 interface HeaderProps {
-  lastUpdated: Date | null;
+  freshness: DataFreshness | null;
   onRefresh: () => void;
   loading: boolean;
 }
 
-export function Header({
-  lastUpdated,
-  onRefresh,
-  loading,
-}: HeaderProps) {
-  const formatRelativeTime = (date: Date | null): string => {
-    if (!date) return '';
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    return `${diffHours}h ago`;
-  };
+export function Header({ freshness, onRefresh, loading }: HeaderProps) {
+  const stale = freshness?.isStale ?? false;
+  const historical = freshness?.source === 'historical';
+  const statusColor = stale ? 'warning.main' : historical ? 'text.disabled' : 'primary.main';
 
   return (
     <AppBar position="sticky" elevation={0}>
@@ -38,44 +21,42 @@ export function Header({
         disableGutters
         sx={{
           justifyContent: 'space-between',
-          minHeight: { xs: 58, sm: 66 },
+          minHeight: HEADER_HEIGHT,
           width: '100%',
-          maxWidth: 1200,
+          maxWidth: 1120,
           mx: 'auto',
           px: { xs: 2, sm: 3 },
+          gap: 2,
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <img
-            src="/logo.png"
-            alt="meta.tracker"
-            style={{ width: 30, height: 30, imageRendering: 'pixelated' }}
-          />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
           <Typography
             component="h1"
-            sx={{
-              fontSize: '0.95rem',
-              fontWeight: 650,
-              letterSpacing: '-0.025em',
-            }}
+            sx={{ fontSize: '0.9rem', fontWeight: 600, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}
           >
-            <span style={{ color: '#f1f3f4' }}>meta</span>
-            <span style={{ color: '#72d38c' }}>.tracker</span>
+            <span style={{ color: colors.text }}>meta</span>
+            <span style={{ color: colors.accent }}>.tracker</span>
           </Typography>
+
+          {freshness && (
+            <Box
+              aria-hidden="true"
+              sx={{
+                width: 6,
+                height: 6,
+                ml: 1,
+                borderRadius: '50%',
+                bgcolor: statusColor,
+                flexShrink: 0,
+              }}
+            />
+          )}
         </Box>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 1.5 } }}>
-          {lastUpdated && (
-            <Typography
-              variant="caption"
-              sx={{
-                display: { xs: 'none', sm: 'flex' },
-                color: 'text.secondary',
-              }}
-            >
-              Updated {formatRelativeTime(lastUpdated)}
-            </Typography>
-          )}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1.5, sm: 2.5 }, flexShrink: 0 }}>
+          {/* Rendered once, here: a second copy toggled by CSS would keep its
+              own one-second interval running behind the hidden one. */}
+          <NextRuns sx={{ gap: { xs: 1.25, sm: 2.5 } }} />
 
           <Tooltip title="Refresh data" arrow>
             <span>
@@ -83,18 +64,18 @@ export function Header({
                 onClick={onRefresh}
                 disabled={loading}
                 size="small"
+                aria-label="Refresh data"
                 sx={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: '50%',
-                  '&:hover': {
-                    backgroundColor: 'action.hover',
-                  },
+                  width: 32,
+                  height: 32,
+                  borderRadius: 0.5,
+                  border: 1,
+                  borderColor: 'divider',
                 }}
               >
                 <RefreshIcon
                   sx={{
-                    fontSize: 18,
+                    fontSize: 16,
                     color: loading ? 'text.disabled' : 'text.secondary',
                     animation: loading ? 'spin 1s linear infinite' : 'none',
                     '@keyframes spin': {
@@ -113,9 +94,11 @@ export function Header({
         <LinearProgress
           sx={{
             height: 2,
-            '& .MuiLinearProgress-bar': {
-              backgroundColor: 'primary.main',
-            },
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            '& .MuiLinearProgress-bar': { backgroundColor: 'primary.main' },
           }}
         />
       )}

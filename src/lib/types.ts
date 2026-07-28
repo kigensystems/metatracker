@@ -50,7 +50,14 @@ export interface GraduatedToken {
   };
 }
 
-export type SortKey = 'volume24h' | 'marketCap' | 'observedPeakMarketCap' | 'priceChange24h';
+// `createdAt` sorts by age: descending is newest first, since a larger
+// timestamp means a younger token.
+export type SortKey =
+  | 'volume24h'
+  | 'marketCap'
+  | 'observedPeakMarketCap'
+  | 'priceChange24h'
+  | 'createdAt';
 
 export interface DataFreshness {
   source: string | null;

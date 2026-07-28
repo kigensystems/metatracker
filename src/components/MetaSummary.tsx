@@ -1,12 +1,13 @@
 import { Box, Typography } from '@mui/material';
 import type { GraduatedToken } from '../lib/types';
+import { FIGURE, LABEL } from '../lib/theme';
 import { changeColor, formatPercent, formatUsd } from '../lib/format';
 
 interface MetaSummaryProps {
   topVolume: GraduatedToken | null;
   topGainer: GraduatedToken | null;
-  topMarketCap: GraduatedToken | null;
-  totalVolume: number;
+  topPeak: GraduatedToken | null;
+  qualifiedCount: number;
   tokenCount: number;
   onSelect: (token: GraduatedToken) => void;
 }
@@ -37,30 +38,25 @@ function SummaryCard({ label, value, valueColor, sub, onClick }: CardProps) {
           : undefined
       }
       sx={{
-        p: { xs: 1.5, sm: 2 },
-        borderColor: 'divider',
+        p: { xs: 1.5, sm: 1.75 },
+        backgroundColor: 'background.paper',
         minWidth: 0,
         cursor: interactive ? 'pointer' : 'default',
         transition: 'background-color 0.15s',
-        '&:nth-of-type(odd)': { borderRight: { xs: 1, md: 0 } },
-        '&:nth-of-type(-n+2)': { borderBottom: { xs: 1, md: 0 } },
-        '&:not(:last-of-type)': { borderRight: { md: 1 } },
         ...(interactive && {
           '&:hover': { backgroundColor: 'action.hover' },
+          '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 },
         }),
       }}
     >
-      <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-        {label}
-      </Typography>
+      <Typography sx={{ ...LABEL, color: 'text.secondary' }}>{label}</Typography>
       <Typography
         sx={{
-          fontWeight: 650,
-          fontSize: { xs: '1.1rem', sm: '1.25rem' },
-          lineHeight: 1.1,
+          ...FIGURE,
+          fontWeight: 500,
+          fontSize: { xs: '1.15rem', sm: '1.3rem' },
+          lineHeight: 1.15,
           color: valueColor || 'text.primary',
-          fontVariantNumeric: 'tabular-nums',
-          letterSpacing: '-0.025em',
           mt: 0.75,
         }}
       >
@@ -69,9 +65,9 @@ function SummaryCard({ label, value, valueColor, sub, onClick }: CardProps) {
       <Typography
         variant="caption"
         sx={{
-          color: 'text.secondary',
+          color: 'text.disabled',
           display: 'block',
-          mt: 0.55,
+          mt: 0.5,
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
@@ -86,59 +82,53 @@ function SummaryCard({ label, value, valueColor, sub, onClick }: CardProps) {
 export function MetaSummary({
   topVolume,
   topGainer,
-  topMarketCap,
-  totalVolume,
+  topPeak,
+  qualifiedCount,
   tokenCount,
   onSelect,
 }: MetaSummaryProps) {
   const gainerValue = topGainer?.priceChange24h;
 
   return (
-    <Box sx={{ mb: 4 }}>
-      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 1.25 }}>
-        <Typography variant="h6" sx={{ fontSize: '1rem' }}>
-          Snapshot overview
-        </Typography>
-        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-          Quick read
-        </Typography>
-      </Box>
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' },
-          border: 1,
-          borderColor: 'divider',
-          borderRadius: 1.5,
-          overflow: 'hidden',
-          backgroundColor: 'background.paper',
-        }}
-      >
-        <SummaryCard
-          label="Most active"
-          value={formatUsd(topVolume?.volume24h)}
-          sub={topVolume?.name || '—'}
-          onClick={topVolume ? () => onSelect(topVolume) : undefined}
-        />
-        <SummaryCard
-          label="Biggest 24h mover"
-          value={formatPercent(gainerValue)}
-          valueColor={changeColor(gainerValue)}
-          sub={topGainer?.name || '—'}
-          onClick={topGainer ? () => onSelect(topGainer) : undefined}
-        />
-        <SummaryCard
-          label="Largest Dune estimate"
-          value={formatUsd(topMarketCap?.marketCap)}
-          sub={topMarketCap?.name || '—'}
-          onClick={topMarketCap ? () => onSelect(topMarketCap) : undefined}
-        />
-        <SummaryCard
-          label="Combined Dex volume"
-          value={formatUsd(totalVolume)}
-          sub={`${tokenCount} launch${tokenCount === 1 ? '' : 'es'}`}
-        />
-      </Box>
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' },
+        // Hairlines as grid gaps: they stay true however the cards wrap.
+        gap: '1px',
+        backgroundColor: 'divider',
+        border: 1,
+        borderColor: 'divider',
+        borderRadius: 0.5,
+        overflow: 'hidden',
+        mb: 3,
+      }}
+    >
+      <SummaryCard
+        label="Cleared $100K"
+        value={`${qualifiedCount}`}
+        valueColor={qualifiedCount > 0 ? 'primary.main' : 'text.disabled'}
+        sub={`of ${tokenCount} graduate${tokenCount === 1 ? '' : 's'}`}
+      />
+      <SummaryCard
+        label="Highest peak"
+        value={formatUsd(topPeak?.observedPeakMarketCap)}
+        sub={topPeak?.name || 'None read yet'}
+        onClick={topPeak ? () => onSelect(topPeak) : undefined}
+      />
+      <SummaryCard
+        label="Most active"
+        value={formatUsd(topVolume?.volume24h)}
+        sub={topVolume?.name || '—'}
+        onClick={topVolume ? () => onSelect(topVolume) : undefined}
+      />
+      <SummaryCard
+        label="Biggest 24h move"
+        value={formatPercent(gainerValue)}
+        valueColor={changeColor(gainerValue)}
+        sub={topGainer?.name || '—'}
+        onClick={topGainer ? () => onSelect(topGainer) : undefined}
+      />
     </Box>
   );
 }

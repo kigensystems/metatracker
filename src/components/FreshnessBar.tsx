@@ -1,4 +1,5 @@
 import { Box, Tooltip, Typography } from '@mui/material';
+import { FIGURE } from '../lib/theme';
 import type { DataFreshness } from '../lib/types';
 
 interface FreshnessBarProps {
@@ -62,10 +63,9 @@ export function FreshnessBar({ freshness }: FreshnessBarProps) {
   return (
     <Box
       sx={{
-        mb: 3,
-        py: 1.25,
-        px: 0.25,
-        borderBottom: 1,
+        mt: 1,
+        py: 1.1,
+        borderTop: 1,
         borderColor: 'divider',
         display: 'flex',
         alignItems: { xs: 'flex-start', sm: 'center' },
@@ -80,8 +80,8 @@ export function FreshnessBar({ freshness }: FreshnessBarProps) {
           sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: statusColor, flexShrink: 0 }}
         />
         <Tooltip title={`Captured ${formatDateTime(capturedOrFetchedAt)}`} arrow>
-          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            <Box component="span" sx={{ color: statusColor, fontWeight: 600 }}>
+          <Typography sx={{ ...FIGURE, fontSize: '0.72rem', color: 'text.secondary' }}>
+            <Box component="span" sx={{ color: statusColor, fontWeight: 500 }}>
               {statusLabel}
             </Box>
             {' · '}{formatRelativeTime(capturedOrFetchedAt)}
@@ -92,11 +92,11 @@ export function FreshnessBar({ freshness }: FreshnessBarProps) {
 
       <Box sx={{ minWidth: 0, textAlign: { xs: 'left', sm: 'right' } }}>
         <Typography
-          variant="caption"
           sx={{
-            color: 'text.secondary',
+            ...FIGURE,
+            fontSize: '0.7rem',
+            color: 'text.disabled',
             display: 'block',
-            fontVariantNumeric: 'tabular-nums',
           }}
         >
           Dune data {formatRelativeTime(freshness.duneExecutionEndedAt)}
@@ -109,7 +109,8 @@ export function FreshnessBar({ freshness }: FreshnessBarProps) {
           <Typography
             variant="caption"
             sx={{
-              color: 'text.secondary',
+              color: 'warning.main',
+              opacity: 0.85,
               display: 'block',
               overflow: 'hidden',
               textOverflow: 'ellipsis',

@@ -20,6 +20,8 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import type { GraduatedToken } from '../lib/types';
 import { safeExternalUrl } from '../lib/external-url';
 import { changeColor, formatAge, formatCompact, formatDateTime, formatPercent, formatUsd } from '../lib/format';
+import { colors, FIGURE, LABEL } from '../lib/theme';
+import { hasClearedPeak } from '../lib/peak';
 import { XIcon } from './icons';
 
 interface TokenDetailDrawerProps {
@@ -55,7 +57,12 @@ export function TokenDetailDrawer({ token, open, onClose }: TokenDetailDrawerPro
 
     const items: StatItem[] = [
       { label: 'Dex 24h volume', value: formatUsd(token.volume24h) },
-      { label: 'Observed peak MC', value: formatUsd(token.observedPeakMarketCap) },
+      {
+        label: 'Observed peak MC',
+        value: formatUsd(token.observedPeakMarketCap),
+        // Same reading as the list: green means it cleared the $100k bar.
+        color: hasClearedPeak(token) ? 'primary.main' : undefined,
+      },
       { label: 'Dune market cap', value: formatUsd(token.duneMarketCap ?? token.marketCap) },
       { label: 'Dex 24h change', value: formatPercent(token.priceChange24h), color: changeColor(token.priceChange24h) },
       { label: 'Dex liquidity', value: formatUsd(token.liquidity) },
@@ -194,14 +201,14 @@ export function TokenDetailDrawer({ token, open, onClose }: TokenDetailDrawerPro
                   <Chip
                     size="small"
                     label={`$${token.symbol || '???'}`}
-                    sx={{ color: 'warning.main', fontFamily: 'monospace' }}
+                    sx={{ color: 'text.secondary', fontFamily: FIGURE.fontFamily }}
                     variant="outlined"
                   />
                   {token.createdAt && (
                     <Chip
                       size="small"
                       label={formatAge(token.createdAt)}
-                      sx={{ color: 'text.secondary', fontFamily: 'monospace' }}
+                      sx={{ color: 'text.secondary', fontFamily: FIGURE.fontFamily }}
                       variant="outlined"
                     />
                   )}
@@ -227,7 +234,7 @@ export function TokenDetailDrawer({ token, open, onClose }: TokenDetailDrawerPro
                 variant="caption"
                 sx={{
                   color: 'text.secondary',
-                  fontFamily: 'monospace',
+                  fontFamily: FIGURE.fontFamily,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
@@ -250,7 +257,7 @@ export function TokenDetailDrawer({ token, open, onClose }: TokenDetailDrawerPro
                 border: 1,
                 borderColor: 'divider',
                 borderRadius: 1.5,
-                backgroundColor: 'rgba(255, 255, 255, 0.018)',
+                backgroundColor: colors.slate,
                 gap: { xs: 2, sm: 2.5 },
                 p: 2,
                 mb: 2.5,
@@ -266,19 +273,15 @@ export function TokenDetailDrawer({ token, open, onClose }: TokenDetailDrawerPro
                       minWidth: 0,
                     }}
                   >
-                    <Typography
-                      variant="caption"
-                      sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}
-                    >
+                    <Typography sx={{ ...LABEL, color: 'text.secondary', display: 'block', mb: 0.6 }}>
                       {stat.label}
                     </Typography>
                     <Typography
-                      variant="body2"
                       sx={{
+                        ...FIGURE,
                         color,
-                        fontVariantNumeric: 'tabular-nums',
-                        fontWeight: 650,
-                        letterSpacing: '-0.015em',
+                        fontSize: '0.85rem',
+                        fontWeight: 500,
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
@@ -307,7 +310,7 @@ export function TokenDetailDrawer({ token, open, onClose }: TokenDetailDrawerPro
                 <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
                   Dune query · market cap, VWAP price, trades
                 </Typography>
-                <Typography variant="body2" sx={{ fontFamily: 'monospace', mt: 0.5 }}>
+                <Typography variant="body2" sx={{ fontFamily: FIGURE.fontFamily, mt: 0.5 }}>
                   {token.sourceExecutionEndedAt
                     ? formatDateTime(Date.parse(token.sourceExecutionEndedAt))
                     : 'Execution time unavailable'}
@@ -320,12 +323,12 @@ export function TokenDetailDrawer({ token, open, onClose }: TokenDetailDrawerPro
                     {token.observedPeakCandleInterval ? ` ${token.observedPeakCandleInterval}` : ''} candle
                     {' '}in the window below
                   </Typography>
-                  <Typography variant="body2" sx={{ fontFamily: 'monospace', mt: 0.5 }}>
+                  <Typography variant="body2" sx={{ fontFamily: FIGURE.fontFamily, mt: 0.5 }}>
                     {token.observedPeakWindowFrom && token.observedPeakWindowTo
                       ? `${formatDateTime(token.observedPeakWindowFrom)} → ${formatDateTime(token.observedPeakWindowTo)}`
                       : 'Observation window not recorded'}
                   </Typography>
-                  <Typography variant="body2" sx={{ fontFamily: 'monospace', mt: 0.5, color: 'text.secondary' }}>
+                  <Typography variant="body2" sx={{ fontFamily: FIGURE.fontFamily, mt: 0.5, color: 'text.secondary' }}>
                     {token.observedPeakFetchedAt
                       ? `Checked ${formatDateTime(token.observedPeakFetchedAt)}`
                       : 'History capture time unavailable'}
@@ -336,7 +339,7 @@ export function TokenDetailDrawer({ token, open, onClose }: TokenDetailDrawerPro
                 <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
                   DexScreener pair · current metrics and profile at capture
                 </Typography>
-                <Typography variant="body2" sx={{ fontFamily: 'monospace', mt: 0.5 }}>
+                <Typography variant="body2" sx={{ fontFamily: FIGURE.fontFamily, mt: 0.5 }}>
                   {token.dexFetchedAt
                     ? formatDateTime(token.dexFetchedAt)
                     : 'Capture time was not recorded for this older snapshot'}
@@ -348,7 +351,7 @@ export function TokenDetailDrawer({ token, open, onClose }: TokenDetailDrawerPro
                     sx={{
                       color: 'text.secondary',
                       display: 'block',
-                      fontFamily: 'monospace',
+                      fontFamily: FIGURE.fontFamily,
                       mt: 0.75,
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',

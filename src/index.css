@@ -1,27 +1,30 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 
-  /* Dark background palette */
-  --color-void: #0b0c0e;
-  --color-abyss: #111315;
-  --color-slate: #171a1d;
-  --color-steel: #272b30;
-  --color-muted: #6f767f;
-  --color-ghost: #9ba2ab;
+  /* Paper. A warm near-white ground with white surfaces on top, so panels read
+     as sheets on a desk rather than boxes drawn on a background. */
+  --color-void: #fafaf8;
+  --color-abyss: #ffffff;
+  --color-slate: #f2f2ef;
+  --color-steel: #e2e2de;
+  --color-muted: #6b6f76;
+  --color-ghost: #4e535a;
+  --color-text: #16181c;
 
-  /* Softer, professional accent colors */
-  --color-accent: #72d38c;
-  --color-accent-muted: #4eaa68;
-  --color-purple: #a9a0dc;
-  --color-amber: #d6a85f;
-  --color-red: #e06c75;
-  --color-blue: #72a7d8;
+  /* Ink-weight accents: saturated enough to find, dark enough to read on
+     paper. Every one of these clears 4.5:1 on the ground. */
+  --color-accent: #0f7b4f;
+  --color-accent-muted: #0b5c3b;
+  --color-amber: #9a5b00;
+  --color-red: #c2314a;
+  --color-blue: #1e6091;
+  --color-purple: #5b4bb8;
 
-  --color-safe: #22c55e;
-  --color-caution: #f59e0b;
-  --color-danger: #ef4444;
+  --color-safe: #0f7b4f;
+  --color-caution: #9a5b00;
+  --color-danger: #c2314a;
 }
 
 * {
@@ -54,7 +57,7 @@ html {
 body {
   font-family: var(--font-sans);
   background: var(--color-void);
-  color: #e8e8f0;
+  color: var(--color-text);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -63,4 +66,14 @@ body {
 button,
 a {
   -webkit-tap-highlight-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
