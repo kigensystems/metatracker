@@ -316,11 +316,18 @@ export function TokenDetailDrawer({ token, open, onClose }: TokenDetailDrawerPro
               {token.observedPeakSource && (
                 <Box sx={{ p: 1.5, borderBottom: 1, borderColor: 'divider' }}>
                   <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                    Solana Tracker · highest observed 1m candle
+                    Solana Tracker · highest
+                    {token.observedPeakCandleInterval ? ` ${token.observedPeakCandleInterval}` : ''} candle
+                    {' '}in the window below
                   </Typography>
                   <Typography variant="body2" sx={{ fontFamily: 'monospace', mt: 0.5 }}>
+                    {token.observedPeakWindowFrom && token.observedPeakWindowTo
+                      ? `${formatDateTime(token.observedPeakWindowFrom)} → ${formatDateTime(token.observedPeakWindowTo)}`
+                      : 'Observation window not recorded'}
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontFamily: 'monospace', mt: 0.5, color: 'text.secondary' }}>
                     {token.observedPeakFetchedAt
-                      ? `History checked ${formatDateTime(token.observedPeakFetchedAt)}`
+                      ? `Checked ${formatDateTime(token.observedPeakFetchedAt)}`
                       : 'History capture time unavailable'}
                   </Typography>
                 </Box>

@@ -62,11 +62,6 @@ export default defineSchema({
     enrichedCount: v.optional(v.number()),
     enrichmentFailedCount: v.optional(v.number()),
     enrichmentSuccessRate: v.optional(v.number()),
-    observedPeakAttemptedCount: v.optional(v.number()),
-    solanaTrackerMonthlyPeriod: v.optional(v.string()),
-    solanaTrackerMonthlyUsed: v.optional(v.number()),
-    solanaTrackerMonthlyLimit: v.optional(v.number()),
-    solanaTrackerMonthlyRemaining: v.optional(v.number()),
     errorMessage: v.optional(v.string()),
   })
     .index("by_slot", ["slot"])
@@ -77,24 +72,22 @@ export default defineSchema({
     .index("by_date", ["snapshotDate"])
     .index("by_mint", ["mint"]),
 
-  // Permanent per-mint cache avoids paying for the same peak on later dates.
+  // One completed observed-peak reading per mint, taken after the token's run
+  // is over. This is the only home for peak data; token rows never store it.
   observedPeaks: defineTable({
     mint: v.string(),
-    observedPeakMarketCap: v.number(),
-    observedPeakAt: v.number(),
-    observedPeakPriceUsd: v.number(),
-    observedPeakFetchedAt: v.number(),
-    observedPeakSource: v.string(),
-    observedPeakSupply: v.number(),
-    observedPeakSupplySource: v.string(),
+    status: v.string(), // "ok", "empty", or "failed"
+    peakMarketCapUsd: v.optional(v.number()),
+    peakAt: v.optional(v.number()),
+    // The window actually examined, so the UI can state coverage honestly
+    // instead of implying all-time.
+    windowFrom: v.number(),
+    windowTo: v.number(),
+    candleInterval: v.string(),
+    candleCount: v.optional(v.number()),
+    source: v.string(),
+    fetchedAt: v.number(),
+    attempts: v.number(),
+    lastError: v.optional(v.string()),
   }).index("by_mint", ["mint"]),
-
-  // Atomic reservations prevent concurrent syncs from exceeding the budget.
-  providerUsage: defineTable({
-    provider: v.string(),
-    period: v.string(),
-    requestCount: v.number(),
-    requestLimit: v.number(),
-    updatedAt: v.number(),
-  }).index("by_provider_period", ["provider", "period"]),
 });

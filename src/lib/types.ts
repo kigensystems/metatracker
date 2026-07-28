@@ -25,11 +25,12 @@ export interface GraduatedToken {
   graduatedAt?: number | null;
   observedPeakMarketCap?: number | null;
   observedPeakAt?: number | null;
-  observedPeakPriceUsd?: number | null;
   observedPeakFetchedAt?: number | null;
   observedPeakSource?: string | null;
-  observedPeakSupply?: number | null;
-  observedPeakSupplySource?: string | null;
+  // The window the peak reading actually covered.
+  observedPeakWindowFrom?: number | null;
+  observedPeakWindowTo?: number | null;
+  observedPeakCandleInterval?: string | null;
   measuredVolumeUsd?: number | null;
   buyCount?: number | null;
   sellCount?: number | null;

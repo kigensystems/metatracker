@@ -42,11 +42,6 @@ export const markSuccess = mutation({
     enrichedCount: v.number(),
     enrichmentFailedCount: v.number(),
     enrichmentSuccessRate: v.number(),
-    observedPeakAttemptedCount: v.optional(v.number()),
-    solanaTrackerMonthlyPeriod: v.optional(v.string()),
-    solanaTrackerMonthlyUsed: v.optional(v.number()),
-    solanaTrackerMonthlyLimit: v.optional(v.number()),
-    solanaTrackerMonthlyRemaining: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const { id, ...patch } = args;

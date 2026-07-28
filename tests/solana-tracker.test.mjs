@@ -7,14 +7,25 @@ const helperUrl = new URL(
 ).href;
 
 const {
-  calculateObservedPeak,
-  derivePeakSupply,
-  enrichObservedPeaks,
-  fetchSolanaTrackerChart,
+  SolanaTrackerHaltError,
+  fetchObservedPeak,
+  fetchTokenChart,
   parseSolanaTrackerChart,
+  peakFromCandles,
 } = await import(helperUrl);
 
-test('Solana Tracker chart parsing accepts its current oclhv response shape', () => {
+const MINT = 'So11111111111111111111111111111111111111112';
+
+function jsonResponder(payload, status = 200) {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({ url: new URL(url), headers: options?.headers });
+    return new Response(JSON.stringify(payload), { status });
+  };
+  return { calls, fetchImpl };
+}
+
+test('chart parsing accepts the provider\'s current oclhv response shape', () => {
   const candles = parseSolanaTrackerChart({
     oclhv: [
       { open: '0.2', high: '0.3', low: '0.1', close: '0.25', volume: '100', time: 20 },
@@ -29,146 +40,128 @@ test('Solana Tracker chart parsing accepts its current oclhv response shape', ()
   ]);
 });
 
-test('observed peak includes the highest wick and uses verified supply', () => {
-  const result = calculateObservedPeak([
-    { open: 0.0001, high: 0.0002, low: 0.0001, close: 0.00015, volume: 75, time: 100 },
-    { open: 0.0002, high: 0.0008, low: 0.0002, close: 0.0005, volume: 250, time: 200 },
-  ], 1_000_000_000);
-
-  assert.deepEqual(result, {
-    marketCapUsd: 800_000,
-    priceUsd: 0.0008,
-    observedAt: 200_000,
-    candleVolume: 250,
-  });
-});
-
-test('peak supply prefers matching-time Dex values and falls back to Dune', () => {
-  assert.deepEqual(derivePeakSupply({
-    mint: 'Mint',
-    symbol: 'DEX',
-    name: 'Dex',
-    dexMarketCap: 250_000,
-    dexPriceUsd: 0.00025,
-    duneMarketCap: 200_000,
-    duneVwapPrice: 0.0002,
-    linksJson: '{}',
-    dexScreenerUrl: '',
-  }), { amount: 1_000_000_000, source: 'dexscreener' });
-
-  assert.deepEqual(derivePeakSupply({
-    mint: 'Mint',
-    symbol: 'DUNE',
-    name: 'Dune',
-    duneMarketCap: 200_000,
-    duneVwapPrice: 0.0002,
-    linksJson: '{}',
-    dexScreenerUrl: '',
-  }), { amount: 1_000_000_000, source: 'dune' });
-});
-
-test('peak enrichment fetches once and carries the result into later snapshots', async () => {
-  const baseToken = {
-    mint: 'So11111111111111111111111111111111111111112',
-    symbol: 'PEAK',
-    name: 'Peak',
-    dexMarketCap: 200_000,
-    dexPriceUsd: 0.0002,
-    createdAt: 1_700_000_000_000,
-    linksJson: '{}',
-    dexScreenerUrl: '',
-  };
-  let calls = 0;
-  const fetchChart = async () => {
-    calls += 1;
-    return [{ open: 0.0002, high: 0.0009, low: 0.0001, close: 0.0004, volume: 1, time: 1_700_000_100 }];
-  };
-
-  const first = await enrichObservedPeaks([baseToken], [], 'fixture-key', {
-    now: 1_700_001_000_000,
-    pauseMs: 0,
-    fetchChart,
-  });
-  assert.equal(calls, 1);
-  assert.equal(first.fetchedCount, 1);
-  assert.deepEqual(first.fetchedMints, [baseToken.mint]);
-  assert.equal(first.tokens[0].observedPeakMarketCap, 900_000);
-  assert.equal(first.tokens[0].observedPeakSource, 'solana-tracker');
-  assert.equal(first.tokens[0].observedPeakSupplySource, 'dexscreener');
-
-  const second = await enrichObservedPeaks([baseToken], first.tokens, 'fixture-key', {
-    now: 1_700_002_000_000,
-    pauseMs: 0,
-    fetchChart,
-  });
-  assert.equal(calls, 1, 'stored peak is reused without another provider request');
-  assert.equal(second.reusedCount, 1);
-  assert.equal(second.tokens[0].observedPeakMarketCap, 900_000);
-});
-
-test('peak enrichment caps failed provider attempts per sync', async () => {
-  let calls = 0;
-  const tokens = ['So11111111111111111111111111111111111111112',
-    '22222222222222222222222222222222',
-    '33333333333333333333333333333333'].map((mint) => ({
-    mint,
-    symbol: 'FAIL',
-    name: 'Failure',
-    duneMarketCap: 100_000,
-    duneVwapPrice: 0.0001,
-    linksJson: '{}',
-    dexScreenerUrl: '',
-  }));
-
-  const result = await enrichObservedPeaks(tokens, [], 'fixture-key', {
-    maxFetches: 2,
-    pauseMs: 0,
-    fetchChart: async () => {
-      calls += 1;
-      throw new Error('provider unavailable');
-    },
-  });
-
-  assert.equal(calls, 2);
-  assert.equal(result.attemptedCount, 2);
-  assert.equal(result.fetchedCount, 0);
-  assert.equal(result.failedMints.length, 2);
-});
-
-test('chart requests keep the API key in the header and bound the time window', async () => {
-  const originalFetch = globalThis.fetch;
-  let capturedUrl;
-  let capturedHeaders;
-
-  globalThis.fetch = async (url, options) => {
-    capturedUrl = new URL(url);
-    capturedHeaders = options.headers;
-    return new Response(JSON.stringify({ oclhv: [] }), { status: 200 });
-  };
-
-  try {
-    const candles = await fetchSolanaTrackerChart({
-      apiKey: 'fixture-secret',
-      mint: 'So11111111111111111111111111111111111111112',
-      timeFrom: 100.9,
-      timeTo: 200.9,
-    });
-
-    assert.deepEqual(candles, []);
-    assert.equal(capturedUrl.origin, 'https://data.solanatracker.io');
-    assert.equal(capturedUrl.searchParams.get('type'), '1m');
-    assert.equal(capturedUrl.searchParams.get('timeFrom'), '100');
-    assert.equal(capturedUrl.searchParams.get('timeTo'), '200');
-    assert.equal(capturedUrl.searchParams.get('currency'), 'usd');
-    assert.equal(capturedHeaders['x-api-key'], 'fixture-secret');
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
 test('chart parsing rejects payloads without candles', () => {
   assert.throws(
     () => parseSolanaTrackerChart({ error: 'unexpected shape' }),
     /no candle array/,
   );
+});
+
+test('peak is the highest wick in the window', () => {
+  assert.deepEqual(peakFromCandles([
+    { open: 100, high: 200, low: 90, close: 150, volume: 75, time: 100 },
+    { open: 150, high: 900_000, low: 150, close: 400, volume: 250, time: 200 },
+    { open: 400, high: 500, low: 300, close: 350, volume: 10, time: 300 },
+  ]), { peakMarketCapUsd: 900_000, peakAt: 200_000 });
+
+  assert.equal(peakFromCandles([]), null);
+});
+
+// Regression guard for the two provider behaviours that previously produced
+// silently wrong peaks: camelCase time params are ignored, and 1m candles hit
+// the 2000-candle cap and lose a token's early history.
+test('chart requests use the raw HTTP contract and keep the key in the header', async () => {
+  const { calls, fetchImpl } = jsonResponder({ oclhv: [] });
+
+  const candles = await fetchTokenChart({
+    apiKey: 'fixture-secret',
+    mint: MINT,
+    timeFrom: 100.9,
+    timeTo: 200.9,
+    fetchImpl,
+  });
+
+  assert.deepEqual(candles, []);
+  const { url, headers } = calls[0];
+  assert.equal(url.origin, 'https://data.solanatracker.io');
+  assert.equal(url.searchParams.get('type'), '1h');
+  assert.equal(url.searchParams.get('time_from'), '100');
+  assert.equal(url.searchParams.get('time_to'), '200');
+  assert.equal(url.searchParams.get('marketCap'), 'true');
+  assert.equal(url.searchParams.get('removeOutliers'), 'false');
+  assert.equal(url.searchParams.get('timeFrom'), null);
+  assert.equal(url.searchParams.get('timeTo'), null);
+  assert.equal(headers['x-api-key'], 'fixture-secret');
+});
+
+test('chart requests reject an unusable window or mint before calling out', async () => {
+  const { calls, fetchImpl } = jsonResponder({ oclhv: [] });
+
+  await assert.rejects(
+    fetchTokenChart({ apiKey: 'k', mint: 'not-a-mint', timeFrom: 1, timeTo: 2, fetchImpl }),
+    /Invalid Solana token mint/,
+  );
+  await assert.rejects(
+    fetchTokenChart({ apiKey: 'k', mint: MINT, timeFrom: 200, timeTo: 100, fetchImpl }),
+    /Invalid Solana Tracker chart window/,
+  );
+  assert.equal(calls.length, 0);
+});
+
+// A refused-everything response must be distinguishable from a per-token
+// failure: an exhausted plan would otherwise burn the retry budget of every
+// pending mint in a single run.
+test('provider-wide refusals are distinguishable so the caller can stop cleanly', async () => {
+  for (const status of [401, 402, 403, 429]) {
+    const { fetchImpl } = jsonResponder({}, status);
+    await assert.rejects(
+      fetchTokenChart({ apiKey: 'k', mint: MINT, timeFrom: 100, timeTo: 200, fetchImpl }),
+      (error) => error instanceof SolanaTrackerHaltError && error.status === status,
+      `status ${status}`,
+    );
+  }
+});
+
+test('a per-token failure stays an ordinary error', async () => {
+  const { fetchImpl } = jsonResponder({}, 500);
+
+  await assert.rejects(
+    fetchTokenChart({ apiKey: 'k', mint: MINT, timeFrom: 100, timeTo: 200, fetchImpl }),
+    (error) => !(error instanceof SolanaTrackerHaltError) && /failed \(500\)/.test(error.message),
+  );
+});
+
+test('an observation records the window it actually covered', async () => {
+  const { calls, fetchImpl } = jsonResponder({
+    oclhv: [
+      { open: 100, high: 150, low: 90, close: 120, volume: 10, time: 1_700_000_100 },
+      { open: 120, high: 302_473, low: 110, close: 200, volume: 40, time: 1_700_000_400 },
+    ],
+  });
+
+  const observation = await fetchObservedPeak({
+    apiKey: 'fixture-secret',
+    mint: MINT,
+    createdAt: 1_700_000_000_000,
+    now: 1_700_090_000_000,
+    fetchImpl,
+  });
+
+  assert.deepEqual(observation, {
+    mint: MINT,
+    status: 'ok',
+    windowFrom: 1_700_000_000_000,
+    windowTo: 1_700_090_000_000,
+    candleInterval: '1h',
+    candleCount: 2,
+    peakMarketCapUsd: 302_473,
+    peakAt: 1_700_000_400_000,
+  });
+  assert.equal(calls[0].url.searchParams.get('time_from'), '1700000000');
+});
+
+test('a token with no candles is recorded as empty rather than zero', async () => {
+  const { fetchImpl } = jsonResponder({ oclhv: [] });
+
+  const observation = await fetchObservedPeak({
+    apiKey: 'fixture-secret',
+    mint: MINT,
+    createdAt: 1_700_000_000_000,
+    now: 1_700_090_000_000,
+    fetchImpl,
+  });
+
+  assert.equal(observation.status, 'empty');
+  assert.equal(observation.candleCount, 0);
+  assert.equal('peakMarketCapUsd' in observation, false);
 });

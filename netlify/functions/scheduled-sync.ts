@@ -11,83 +11,13 @@ import {
   getDuneStatusCode,
   getErrorMessage,
   isRetryableSyncError,
-  type StoredToken,
 } from "./_shared/token-sync";
-import {
-  derivePeakSupply,
-  enrichObservedPeaks,
-} from "./_shared/solana-tracker";
-import { getMonthlyRequestPeriod } from "../../convex/observed_peak_budget";
 
 const QUERY_ID = DEFAULT_DUNE_QUERY_ID;
 const SYNC_RETRY_ATTEMPTS = 3;
-const SOLANA_TRACKER_PROVIDER = "solana-tracker";
-const SOLANA_TRACKER_MONTHLY_REQUEST_LIMIT = 2_200;
-const SOLANA_TRACKER_MAX_REQUESTS_PER_SYNC = 8;
-
-interface PeakLike {
-  mint: string;
-  observedPeakMarketCap?: number;
-  observedPeakFetchedAt?: number;
-}
-
-interface PeakRecord {
-  mint: string;
-  observedPeakMarketCap: number;
-  observedPeakAt: number;
-  observedPeakPriceUsd: number;
-  observedPeakFetchedAt: number;
-  observedPeakSource: string;
-  observedPeakSupply: number;
-  observedPeakSupplySource: string;
-}
-
-function hasStoredPeak(token: PeakLike): boolean {
-  return token.observedPeakFetchedAt !== undefined
-    && token.observedPeakMarketCap !== undefined;
-}
-
-function buildPeakCandidates(incoming: StoredToken[], stored: StoredToken[]): StoredToken[] {
-  const byMint = new Map<string, StoredToken>();
-  for (const token of stored) byMint.set(token.mint, token);
-  for (const token of incoming) byMint.set(token.mint, token);
-
-  return [...byMint.values()].sort((left, right) => (
-    (left.createdAt ?? Number.MAX_SAFE_INTEGER) - (right.createdAt ?? Number.MAX_SAFE_INTEGER)
-  ));
-}
-
-function toPeakRecord(token: StoredToken): PeakRecord | null {
-  if (
-    token.observedPeakMarketCap === undefined
-    || token.observedPeakAt === undefined
-    || token.observedPeakPriceUsd === undefined
-    || token.observedPeakFetchedAt === undefined
-    || token.observedPeakSource === undefined
-    || token.observedPeakSupply === undefined
-    || token.observedPeakSupplySource === undefined
-  ) {
-    return null;
-  }
-
-  return {
-    mint: token.mint,
-    observedPeakMarketCap: token.observedPeakMarketCap,
-    observedPeakAt: token.observedPeakAt,
-    observedPeakPriceUsd: token.observedPeakPriceUsd,
-    observedPeakFetchedAt: token.observedPeakFetchedAt,
-    observedPeakSource: token.observedPeakSource,
-    observedPeakSupply: token.observedPeakSupply,
-    observedPeakSupplySource: token.observedPeakSupplySource,
-  };
-}
 
 function getTodayUTC(): string {
   return new Date().toISOString().split("T")[0];
-}
-
-function getPreviousUTCDate(now: number): string {
-  return new Date(now - (24 * 60 * 60 * 1000)).toISOString().split("T")[0];
 }
 
 function logRetry(stage: string, event: RetryEvent) {
@@ -123,7 +53,6 @@ export default async function handler(_request: Request, _context: Context) {
 
   const duneApiKey = process.env.DUNE_API_KEY;
   const convexUrl = process.env.CONVEX_URL;
-  const solanaTrackerApiKey = process.env.SOLANA_TRACKER_API_KEY;
 
   if (!duneApiKey || !convexUrl) {
     console.error("Missing required environment variables");
@@ -182,101 +111,10 @@ export default async function handler(_request: Request, _context: Context) {
     console.log(`Got ${duneResult.tokens.length} tokens from Dune`);
 
     console.log("Enriching tokens with DexScreener...");
-    const { tokens: dexEnrichedTokens, failedEnrichments, enrichmentRate } = await enrichTokens(duneResult.tokens);
-    let enrichedTokens = dexEnrichedTokens;
+    const { tokens: enrichedTokens, failedEnrichments, enrichmentRate } = await enrichTokens(duneResult.tokens);
     console.log(`Enriched ${enrichedTokens.length} tokens (${enrichmentRate.toFixed(1)}% success rate)`);
     if (failedEnrichments.length > 0) {
       console.log(`Failed to enrich ${failedEnrichments.length} tokens from DexScreener`);
-    }
-
-    const previousDate = getPreviousUTCDate(startedAt);
-    const storedPeakTokens = await runWithRetry(
-      "Load prior observed peaks",
-      async () => {
-        const [todayTokens, yesterdayTokens] = await Promise.all([
-          convex.query(api.graduatedTokens.byDate, { date: today }),
-          convex.query(api.graduatedTokens.byDate, { date: previousDate }),
-        ]);
-        return [...yesterdayTokens, ...todayTokens];
-      },
-    );
-
-    const peakCandidates = buildPeakCandidates(enrichedTokens, storedPeakTokens);
-    const permanentPeaks = await runWithRetry(
-      "Load permanent observed peak cache",
-      () => convex.query(api.observedPeaks.byMints, {
-        mints: peakCandidates.map((token) => token.mint),
-      }),
-    );
-    const priorPeakTokens = [...storedPeakTokens, ...permanentPeaks];
-    const cachedPeakMints = new Set(
-      priorPeakTokens.filter(hasStoredPeak).map((token) => token.mint),
-    );
-    const eligiblePeakCount = peakCandidates.filter((token) => (
-      !cachedPeakMints.has(token.mint) && derivePeakSupply(token) !== null
-    )).length;
-    const peakRequestPeriod = getMonthlyRequestPeriod(startedAt);
-    const requestedPeakCalls = solanaTrackerApiKey
-      ? Math.min(SOLANA_TRACKER_MAX_REQUESTS_PER_SYNC, eligiblePeakCount)
-      : 0;
-    const peakBudget = await runWithRetry(
-      "Reserve Solana Tracker request budget",
-      () => convex.mutation(api.observedPeaks.reserveRequests, {
-        provider: SOLANA_TRACKER_PROVIDER,
-        period: peakRequestPeriod,
-        requested: requestedPeakCalls,
-        limit: SOLANA_TRACKER_MONTHLY_REQUEST_LIMIT,
-      }),
-    );
-
-    const peakEnrichment = await enrichObservedPeaks(
-      peakCandidates,
-      priorPeakTokens,
-      solanaTrackerApiKey,
-      {
-        maxFetches: peakBudget.granted,
-        now: startedAt,
-      },
-    );
-    const peakByMint = new Map(peakEnrichment.tokens.map((token) => [token.mint, token]));
-    enrichedTokens = enrichedTokens.map((token) => peakByMint.get(token.mint) ?? token);
-    console.log(
-      `Observed peaks: ${peakEnrichment.fetchedCount} fetched, ${peakEnrichment.reusedCount} reused, `
-      + `${peakEnrichment.failedMints.length} failed; monthly budget `
-      + `${peakBudget.used}/${peakBudget.limit}`,
-    );
-    if (!solanaTrackerApiKey) {
-      console.log("SOLANA_TRACKER_API_KEY not configured; carried stored peaks without new chart requests");
-    }
-
-    const permanentPeakMints = new Set(permanentPeaks.map((peak) => peak.mint));
-    const fetchedMints = new Set(peakEnrichment.fetchedMints);
-    const cacheSeeds = peakEnrichment.tokens
-      .filter((token) => !permanentPeakMints.has(token.mint) || fetchedMints.has(token.mint))
-      .map(toPeakRecord)
-      .filter((peak): peak is PeakRecord => peak !== null);
-    if (cacheSeeds.length > 0) {
-      await runWithRetry(
-        "Store permanent observed peak cache",
-        () => convex.mutation(api.observedPeaks.upsertMany, {
-          peaks: cacheSeeds,
-          patchTokenRows: false,
-        }),
-      );
-    }
-
-    const newlyFetchedPeaks = peakEnrichment.tokens
-      .filter((token) => fetchedMints.has(token.mint))
-      .map(toPeakRecord)
-      .filter((peak): peak is PeakRecord => peak !== null);
-    if (newlyFetchedPeaks.length > 0) {
-      await runWithRetry(
-        "Patch observed peaks onto retained token rows",
-        () => convex.mutation(api.observedPeaks.upsertMany, {
-          peaks: newlyFetchedPeaks,
-          patchTokenRows: true,
-        }),
-      );
     }
 
     console.log("Storing in Convex...");
@@ -328,11 +166,6 @@ export default async function handler(_request: Request, _context: Context) {
           enrichedCount: enrichedTokens.length,
           enrichmentFailedCount: failedEnrichments.length,
           enrichmentSuccessRate: enrichmentRate,
-          observedPeakAttemptedCount: peakEnrichment.attemptedCount,
-          solanaTrackerMonthlyPeriod: peakBudget.period,
-          solanaTrackerMonthlyUsed: peakBudget.used,
-          solanaTrackerMonthlyLimit: peakBudget.limit,
-          solanaTrackerMonthlyRemaining: peakBudget.remaining,
         });
       } catch (error) {
         console.error("Failed to record sync success:", error);
@@ -353,20 +186,6 @@ export default async function handler(_request: Request, _context: Context) {
       enrichment: {
         failedCount: failedEnrichments.length,
         successRate: enrichmentRate,
-      },
-      observedPeaks: {
-        attemptedCount: peakEnrichment.attemptedCount,
-        fetchedCount: peakEnrichment.fetchedCount,
-        reusedCount: peakEnrichment.reusedCount,
-        failedCount: peakEnrichment.failedMints.length,
-        skippedWithoutSupplyCount: peakEnrichment.skippedWithoutSupply.length,
-        pendingEligibleCount: Math.max(0, eligiblePeakCount - peakEnrichment.fetchedCount),
-        monthlyBudget: {
-          period: peakBudget.period,
-          used: peakBudget.used,
-          limit: peakBudget.limit,
-          remaining: peakBudget.remaining,
-        },
       },
     }), {
       status: 200,

@@ -6,7 +6,6 @@ const cacheRoot = new URL('../node_modules/.cache/health-test/', import.meta.url
 const tokenSyncUrl = new URL('netlify/functions/_shared/token-sync.js', cacheRoot).href;
 const apiContractUrl = new URL('netlify/functions/_shared/api-contract.js', cacheRoot).href;
 const snapshotGuardsUrl = new URL('convex/snapshot_guards.js', cacheRoot).href;
-const observedPeakBudgetUrl = new URL('convex/observed_peak_budget.js', cacheRoot).href;
 const tokenValidatorUrl = new URL('convex/token_validator.js', cacheRoot).href;
 const frontendContractUrl = new URL('src/lib/api-contract.js', cacheRoot).href;
 const externalUrl = new URL('src/lib/external-url.js', cacheRoot).href;
@@ -20,7 +19,6 @@ const {
   validateSnapshotInput,
 } = await import(snapshotGuardsUrl);
 const { storedTokenValidator, tokenValidator } = await import(tokenValidatorUrl);
-const { getMonthlyRequestPeriod, grantProviderRequests } = await import(observedPeakBudgetUrl);
 const { parseGraduatedPayload } = await import(frontendContractUrl);
 const { safeExternalUrl } = await import(externalUrl);
 
@@ -74,13 +72,18 @@ test('current and extended Dune rows both parse during the transition', async ()
     tradeCount: 654,
     vwapPrice: 0.00025,
     graduatedAt: 1784374200000,
-    observedPeakMarketCap: 900000,
-    observedPeakAt: 1784376900000,
     measuredVolumeUsd: 750000,
     buyCount: 400,
     sellCount: 254,
     sourceExecutionEndedAt: '2026-07-18T14:00:00.000Z',
   }]);
+});
+
+test('Dune peak columns are ignored so Solana Tracker stays the only peak source', async () => {
+  const extended = await parseDuneFixture('dune/extended-response.json');
+
+  assert.equal('observedPeakMarketCap' in extended.tokens[0], false);
+  assert.equal('observedPeakAt' in extended.tokens[0], false);
 });
 
 test('extended Dune fields survive enrichment and the real API mapper', async () => {
@@ -93,8 +96,6 @@ test('extended Dune fields survive enrichment and the real API mapper', async ()
     const apiToken = toApiToken(enriched.tokens[0]);
 
     assert.equal(apiToken.graduatedAt, 1784374200000);
-    assert.equal(apiToken.observedPeakMarketCap, 900000);
-    assert.equal(apiToken.observedPeakAt, 1784376900000);
     assert.equal(apiToken.measuredVolumeUsd, 750000);
     assert.equal(apiToken.buyCount, 400);
     assert.equal(apiToken.sellCount, 254);
@@ -220,11 +221,11 @@ test('real API mapper adds extended fields without changing the current token co
     graduatedAt: 1784374200000,
     observedPeakMarketCap: 900000,
     observedPeakAt: 1784376900000,
-    observedPeakPriceUsd: 0.0009,
     observedPeakFetchedAt: 1784383500000,
     observedPeakSource: 'solana-tracker',
-    observedPeakSupply: 1_000_000_000,
-    observedPeakSupplySource: 'dexscreener',
+    observedPeakWindowFrom: 1784370000000,
+    observedPeakWindowTo: 1784383500000,
+    observedPeakCandleInterval: '1h',
     measuredVolumeUsd: 750000,
     buyCount: 400,
     sellCount: 254,
@@ -244,7 +245,7 @@ test('real API mapper adds extended fields without changing the current token co
   assert.equal('observedPeakMarketCap' in current, false);
   assert.equal(extended.observedPeakMarketCap, 900000);
   assert.equal(extended.observedPeakSource, 'solana-tracker');
-  assert.equal(extended.observedPeakSupplySource, 'dexscreener');
+  assert.equal(extended.observedPeakCandleInterval, '1h');
   assert.equal(extended.measuredVolumeUsd, 750000);
   assert.equal(extended.duneMarketCap, 250000);
   assert.equal(extended.dexMarketCap, 275000);
@@ -278,17 +279,12 @@ test('API and frontend URL guards allow only HTTP(S) destinations', () => {
 
 test('storage guards accept old and additive token documents without weakening write safety', () => {
   const oldToken = { mint: 'OldMint', symbol: 'OLD', marketCap: 1000 };
-  const extendedToken = { ...oldToken, observedPeakMarketCap: 5000, buyCount: 25, sellCount: 10 };
+  const extendedToken = { ...oldToken, measuredVolumeUsd: 5000, buyCount: 25, sellCount: 10 };
   const today = '2026-07-18';
+  // Peaks are intentionally absent: they live in `observedPeaks` by mint and are
+  // joined at read time, so a token row never carries one.
   const additiveFields = [
     'graduatedAt',
-    'observedPeakMarketCap',
-    'observedPeakAt',
-    'observedPeakPriceUsd',
-    'observedPeakFetchedAt',
-    'observedPeakSource',
-    'observedPeakSupply',
-    'observedPeakSupplySource',
     'measuredVolumeUsd',
     'buyCount',
     'sellCount',
@@ -399,18 +395,6 @@ test('daily observed unions retain disappearing tokens without duplicating mints
   assert.throws(
     () => getSnapshotMergeStats([{ mint: 'A' }], [{ mint: 'B' }, { mint: 'B' }]),
     /duplicate token mints/,
-  );
-});
-
-test('monthly provider budget grants only the remaining safe allowance', () => {
-  assert.equal(getMonthlyRequestPeriod(Date.parse('2026-07-22T12:00:00.000Z')), '2026-07');
-  assert.deepEqual(
-    grantProviderRequests({ used: 2_198, requested: 8, limit: 2_200 }),
-    { granted: 2, usedAfter: 2_200, remaining: 0 },
-  );
-  assert.deepEqual(
-    grantProviderRequests({ used: 2_200, requested: 8, limit: 2_200 }),
-    { granted: 0, usedAfter: 2_200, remaining: 0 },
   );
 });
 

@@ -90,13 +90,17 @@ src/
 netlify/functions/
   graduated.ts            Main data API (live / historical / check-freshness)
   scheduled-sync.ts       Every-2h cron writer (background function)
+  peak-backfill.ts        Hourly observed-peak reader (background function)
   health.ts               Convex-backed health endpoint (no Dune call)
   backfill.ts             Admin-only historical repair (POST)
   available-dates.ts      Snapshot date list for the date picker
-  _shared/                token-sync (Dune+DexScreener engine), retry, sync-health
+  _shared/                token-sync (Dune+DexScreener engine), solana-tracker
+                          (observed peak), retry, sync-health
 convex/
-  schema.ts               Tables: duneMetadata, dailySnapshots, syncRuns, graduatedTokens
+  schema.ts               Tables: duneMetadata, dailySnapshots, syncRuns,
+                          graduatedTokens, observedPeaks
   graduatedTokens.ts      storeSnapshot (write-guards) + token reads
+  observedPeaks.ts        pending queue, byMints read, record write
   dailySnapshots.ts, duneMetadata.ts, syncRuns.ts
 .github/workflows/health-monitor.yml   External /api/health monitor + issue alerts
 ```
@@ -127,8 +131,9 @@ npx tsc --noEmit -p convex/tsconfig.json   # typecheck Convex
   manual fetches may return fresh data but must not advance `duneMetadata`
   unless a matching snapshot is stored.
 - **After any Netlify deploy that touches functions, verify** deploy metadata
-  has `function_schedules: [{ name: "scheduled-sync", cron: "0 */2 * * *" }]`.
-  TypeScript passing does not prove the cron registered.
+  registers *both* schedules: `scheduled-sync` at `0 */2 * * *` and
+  `peak-backfill` at `20 * * * *`. TypeScript passing does not prove a cron
+  registered.
 - **Date tabs = rolling snapshot windows**, not DexScreener `pairCreatedAt`
   buckets. Don't group history by `pairCreatedAt`.
 - **Health source is `syncRuns` + `/api/health`**, not snapshot presence.

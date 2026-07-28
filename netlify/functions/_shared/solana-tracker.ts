@@ -1,18 +1,28 @@
-import type { StoredToken } from "./token-sync.js";
+/**
+ * Observed peak market cap from Solana Tracker's OHLCV chart endpoint.
+ *
+ * Two provider behaviours drive the design here, both verified against the live
+ * API on 2026-07-27:
+ *
+ * 1. A response is capped at 2000 candles and returns the *most recent* ones.
+ *    `time_from` cannot pull coverage further back. At `1m` a token with more
+ *    than 2000 traded minutes silently loses its early history — which is
+ *    exactly where memecoin peaks occur. `1h` keeps a token's whole life inside
+ *    the cap (2000 hourly candles is ~83 days) and an hourly candle's `high` is
+ *    the max of its minute highs, so brief wicks survive.
+ * 2. The documented raw parameters are snake_case. Sending `timeFrom`/`timeTo`
+ *    is silently ignored and returns the provider's default window.
+ *
+ * Peaks are read once per mint, after the token's run is over, so the value is
+ * a completed observation rather than a running maximum.
+ */
 
-export type SolanaTrackerCandleInterval =
-  | "1m"
-  | "3m"
-  | "5m"
-  | "15m"
-  | "30m"
-  | "1h"
-  | "2h"
-  | "4h"
-  | "6h"
-  | "8h"
-  | "12h"
-  | "1d";
+const SOLANA_TRACKER_API_BASE = "https://data.solanatracker.io";
+const SOLANA_ADDRESS_PATTERN = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+
+/** Hourly keeps a full token lifetime inside the provider's 2000-candle cap. */
+export const PEAK_CANDLE_INTERVAL = "1h";
+export const PEAK_SOURCE = "solana-tracker";
 
 export interface SolanaTrackerCandle {
   open: number;
@@ -24,55 +34,40 @@ export interface SolanaTrackerCandle {
 }
 
 export interface ObservedPeak {
-  marketCapUsd: number;
-  priceUsd: number;
-  observedAt: number;
-  candleVolume: number;
+  peakMarketCapUsd: number;
+  peakAt: number;
 }
 
-export interface ObservedPeakEnrichmentResult {
-  tokens: StoredToken[];
-  attemptedCount: number;
-  fetchedCount: number;
-  fetchedMints: string[];
-  reusedCount: number;
-  failedMints: string[];
-  skippedWithoutSupply: string[];
-}
-
-type PeakSupplySource = "dexscreener" | "dune";
-type PeakField =
-  | "observedPeakMarketCap"
-  | "observedPeakAt"
-  | "observedPeakPriceUsd"
-  | "observedPeakFetchedAt"
-  | "observedPeakSource"
-  | "observedPeakSupply"
-  | "observedPeakSupplySource";
-type PreviousPeakToken = Pick<StoredToken, "mint"> & Partial<Pick<StoredToken, PeakField>>;
-
-interface PeakSupply {
-  amount: number;
-  source: PeakSupplySource;
-}
-
-interface EnrichObservedPeakOptions {
-  maxFetches?: number;
-  now?: number;
-  pauseMs?: number;
-  fetchChart?: typeof fetchSolanaTrackerChart;
-}
-
-interface FetchChartOptions {
-  apiKey: string;
+export interface ObservedPeakObservation {
   mint: string;
-  timeFrom: number;
-  timeTo: number;
-  interval?: SolanaTrackerCandleInterval;
+  /** `failed` is only ever produced by the caller when a read throws. */
+  status: "ok" | "empty" | "failed";
+  windowFrom: number;
+  windowTo: number;
+  candleInterval: string;
+  candleCount: number;
+  peakMarketCapUsd?: number;
+  peakAt?: number;
+  lastError?: string;
 }
 
-const SOLANA_TRACKER_API_BASE = "https://data.solanatracker.io";
-const SOLANA_ADDRESS_PATTERN = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+/**
+ * The provider is refusing all traffic, not just this token: rate limit, bad
+ * key, or an exhausted plan. The caller must stop the run rather than record
+ * per-token failures, otherwise one exhausted quota would burn the retry
+ * budget of every pending mint at once.
+ */
+export class SolanaTrackerHaltError extends Error {
+  readonly status: number;
+
+  constructor(status: number) {
+    super(`Solana Tracker is refusing requests (${status})`);
+    this.name = "SolanaTrackerHaltError";
+    this.status = status;
+  }
+}
+
+const HALT_STATUSES = new Set([401, 402, 403, 429]);
 
 function finiteNumber(value: unknown): number | null {
   const numberValue = Number(value);
@@ -134,12 +129,34 @@ export function parseSolanaTrackerChart(payload: unknown): SolanaTrackerCandle[]
     .sort((a, b) => a.time - b.time);
 }
 
-export async function fetchSolanaTrackerChart({
+/** Highest candle in the window, wicks included. */
+export function peakFromCandles(candles: SolanaTrackerCandle[]): ObservedPeak | null {
+  const peak = candles.reduce<SolanaTrackerCandle | null>((best, candle) => {
+    if (candle.high <= 0) return best;
+    return best === null || candle.high > best.high ? candle : best;
+  }, null);
+
+  if (!peak) return null;
+
+  return { peakMarketCapUsd: peak.high, peakAt: peak.time * 1000 };
+}
+
+interface FetchChartOptions {
+  apiKey: string;
+  mint: string;
+  timeFrom: number;
+  timeTo: number;
+  interval?: string;
+  fetchImpl?: typeof fetch;
+}
+
+export async function fetchTokenChart({
   apiKey,
   mint,
   timeFrom,
   timeTo,
-  interval = "1m",
+  interval = PEAK_CANDLE_INTERVAL,
+  fetchImpl = fetch,
 }: FetchChartOptions): Promise<SolanaTrackerCandle[]> {
   if (!apiKey.trim()) throw new Error("SOLANA_TRACKER_API_KEY is not configured");
   if (!SOLANA_ADDRESS_PATTERN.test(mint)) throw new Error("Invalid Solana token mint");
@@ -149,14 +166,18 @@ export async function fetchSolanaTrackerChart({
 
   const url = new URL(`/chart/${mint}`, SOLANA_TRACKER_API_BASE);
   url.searchParams.set("type", interval);
-  url.searchParams.set("timeFrom", String(Math.floor(timeFrom)));
-  url.searchParams.set("timeTo", String(Math.floor(timeTo)));
-  url.searchParams.set("currency", "usd");
+  // Snake_case is the raw HTTP contract; camelCase is silently ignored.
+  url.searchParams.set("time_from", String(Math.floor(timeFrom)));
+  url.searchParams.set("time_to", String(Math.floor(timeTo)));
+  // Candles are market cap, so no supply has to be inferred from mixed-time
+  // Dune and DexScreener values.
+  url.searchParams.set("marketCap", "true");
+  // A brief wick is a real result for this dashboard; never discard it.
+  url.searchParams.set("removeOutliers", "false");
 
-  const response = await fetch(url, {
-    headers: { "x-api-key": apiKey },
-  });
+  const response = await fetchImpl(url, { headers: { "x-api-key": apiKey } });
 
+  if (HALT_STATUSES.has(response.status)) throw new SolanaTrackerHaltError(response.status);
   if (!response.ok) {
     throw new Error(`Solana Tracker chart request failed (${response.status})`);
   }
@@ -164,184 +185,44 @@ export async function fetchSolanaTrackerChart({
   return parseSolanaTrackerChart(await response.json());
 }
 
-/** Calculates the highest observed provider candle, including brief wicks. */
-export function calculateObservedPeak(
-  candles: SolanaTrackerCandle[],
-  verifiedSupply: number,
-): ObservedPeak | null {
-  if (!Number.isFinite(verifiedSupply) || verifiedSupply <= 0) {
-    throw new Error("A positive verified token supply is required");
-  }
-
-  const peakCandle = candles.reduce<SolanaTrackerCandle | null>((peak, candle) => {
-    if (!Number.isFinite(candle.high) || candle.high <= 0) return peak;
-    return peak === null || candle.high > peak.high ? candle : peak;
-  }, null);
-
-  if (!peakCandle) return null;
-
-  return {
-    marketCapUsd: peakCandle.high * verifiedSupply,
-    priceUsd: peakCandle.high,
-    observedAt: peakCandle.time * 1000,
-    candleVolume: peakCandle.volume,
-  };
-}
-
-function positiveRatio(numerator: unknown, denominator: unknown): number | null {
-  const top = finiteNumber(numerator);
-  const bottom = finiteNumber(denominator);
-  if (top === null || bottom === null || top <= 0 || bottom <= 0) return null;
-
-  const ratio = top / bottom;
-  return Number.isFinite(ratio) && ratio > 0 ? ratio : null;
-}
-
-export function derivePeakSupply(token: StoredToken): PeakSupply | null {
-  const dexSupply = positiveRatio(token.dexMarketCap, token.dexPriceUsd);
-  if (dexSupply !== null) return { amount: dexSupply, source: "dexscreener" };
-
-  const duneSupply = positiveRatio(token.duneMarketCap, token.duneVwapPrice);
-  if (duneSupply !== null) return { amount: duneSupply, source: "dune" };
-
-  return null;
-}
-
-const PEAK_FIELDS = [
-  "observedPeakMarketCap",
-  "observedPeakAt",
-  "observedPeakPriceUsd",
-  "observedPeakFetchedAt",
-  "observedPeakSource",
-  "observedPeakSupply",
-  "observedPeakSupplySource",
-] as const satisfies ReadonlyArray<PeakField>;
-
-function carryPeakFields(token: StoredToken, previous?: PreviousPeakToken): StoredToken {
-  if (!previous) return { ...token };
-
-  const next = { ...token };
-  for (const field of PEAK_FIELDS) {
-    const value = previous[field];
-    if (value !== undefined) {
-      Object.assign(next, { [field]: value });
-    }
-  }
-  return next;
-}
-
-function newestPreviousByMint(tokens: PreviousPeakToken[]): Map<string, PreviousPeakToken> {
-  const byMint = new Map<string, PreviousPeakToken>();
-
-  for (const token of tokens) {
-    const current = byMint.get(token.mint);
-    const currentFetchedAt = current?.observedPeakFetchedAt ?? 0;
-    const candidateFetchedAt = token.observedPeakFetchedAt ?? 0;
-    if (!current || candidateFetchedAt >= currentFetchedAt) {
-      byMint.set(token.mint, token);
-    }
-  }
-
-  return byMint;
-}
-
-function chartWindowStart(token: StoredToken, now: number): number {
-  const maximumLookback = now - (48 * 60 * 60 * 1000);
-  const tokenStart = Math.min(token.createdAt ?? now, now) - (6 * 60 * 60 * 1000);
-  return Math.max(1, Math.floor(Math.max(maximumLookback, tokenStart) / 1000));
+interface FetchObservedPeakOptions {
+  apiKey: string;
+  mint: string;
+  createdAt: number;
+  now?: number;
+  fetchImpl?: typeof fetch;
 }
 
 /**
- * Fetches a token's peak once, then carries it into later rolling snapshots.
- * The scheduled caller supplies today's and yesterday's stored rows so a UTC
- * date rollover does not spend another API request on the same token.
+ * One completed observation of a token's whole life. Returns `empty` when the
+ * provider has no candles for the mint so the caller can stop asking.
  */
-export async function enrichObservedPeaks(
-  tokens: StoredToken[],
-  previousTokens: PreviousPeakToken[],
-  apiKey: string | undefined,
-  options: EnrichObservedPeakOptions = {},
-): Promise<ObservedPeakEnrichmentResult> {
-  const now = options.now ?? Date.now();
-  const maxFetches = Math.max(0, Math.floor(options.maxFetches ?? 8));
-  const pauseMs = Math.max(0, options.pauseMs ?? 350);
-  const fetchChart = options.fetchChart ?? fetchSolanaTrackerChart;
-  const previousByMint = newestPreviousByMint(previousTokens);
-  const nextTokens = tokens.map((token) => carryPeakFields(token, previousByMint.get(token.mint)));
-  const failedMints: string[] = [];
-  const fetchedMints: string[] = [];
-  const skippedWithoutSupply: string[] = [];
-  let attemptedCount = 0;
-  let fetchedCount = 0;
-  let reusedCount = nextTokens.filter((token) => token.observedPeakFetchedAt !== undefined).length;
+export async function fetchObservedPeak({
+  apiKey,
+  mint,
+  createdAt,
+  now = Date.now(),
+  fetchImpl,
+}: FetchObservedPeakOptions): Promise<ObservedPeakObservation> {
+  const windowFrom = Math.floor(createdAt / 1000);
+  const windowTo = Math.floor(now / 1000);
 
-  if (!apiKey?.trim() || maxFetches === 0) {
-    return {
-      tokens: nextTokens,
-      attemptedCount,
-      fetchedCount,
-      fetchedMints,
-      reusedCount,
-      failedMints,
-      skippedWithoutSupply,
-    };
-  }
-
-  for (const token of nextTokens) {
-    if (token.observedPeakFetchedAt !== undefined || attemptedCount >= maxFetches) continue;
-
-    const supply = derivePeakSupply(token);
-    if (!supply) {
-      skippedWithoutSupply.push(token.mint);
-      continue;
-    }
-
-    attemptedCount += 1;
-    try {
-      const candles = await fetchChart({
-        apiKey,
-        mint: token.mint,
-        timeFrom: chartWindowStart(token, now),
-        timeTo: Math.floor(now / 1000),
-        interval: "1m",
-      });
-      const peak = calculateObservedPeak(candles, supply.amount);
-
-      if (!peak) {
-        failedMints.push(token.mint);
-        continue;
-      }
-
-      token.observedPeakMarketCap = peak.marketCapUsd;
-      token.observedPeakAt = peak.observedAt;
-      token.observedPeakPriceUsd = peak.priceUsd;
-      token.observedPeakFetchedAt = now;
-      token.observedPeakSource = "solana-tracker";
-      token.observedPeakSupply = supply.amount;
-      token.observedPeakSupplySource = supply.source;
-      fetchedCount += 1;
-      fetchedMints.push(token.mint);
-    } catch {
-      failedMints.push(token.mint);
-    }
-
-    if (pauseMs > 0 && attemptedCount < maxFetches) {
-      await new Promise((resolve) => setTimeout(resolve, pauseMs));
-    }
-  }
-
-  reusedCount = nextTokens.filter((token) => (
-    token.observedPeakFetchedAt !== undefined
-    && previousByMint.has(token.mint)
-  )).length;
+  const candles = await fetchTokenChart({
+    apiKey,
+    mint,
+    timeFrom: windowFrom,
+    timeTo: windowTo,
+    fetchImpl,
+  });
+  const peak = peakFromCandles(candles);
 
   return {
-    tokens: nextTokens,
-    attemptedCount,
-    fetchedCount,
-    fetchedMints,
-    reusedCount,
-    failedMints,
-    skippedWithoutSupply,
+    mint,
+    status: peak ? "ok" : "empty",
+    windowFrom: windowFrom * 1000,
+    windowTo: windowTo * 1000,
+    candleInterval: PEAK_CANDLE_INTERVAL,
+    candleCount: candles.length,
+    ...(peak ? { peakMarketCapUsd: peak.peakMarketCapUsd, peakAt: peak.peakAt } : {}),
   };
 }

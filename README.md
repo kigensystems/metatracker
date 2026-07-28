@@ -69,19 +69,44 @@ change, website, X/Twitter, and pair creation timestamp.
 
 ### Solana Tracker
 
-The chart endpoint supplies one-minute USD candles for the bounded observed-peak
-enrichment queue. Peaks are cached permanently by mint and copied back to every
-stored daily row, so later dates do not spend another request for the same
-token. The highest observed candle market cap is retained across later syncs.
-This metric is labeled **observed peak market cap**, not ATH, because coverage
-begins when a token enters the stored cohort and is not yet proven complete for
-the token's full lifetime.
+The chart endpoint supplies observed peak market cap. `netlify/functions/peak-backfill.ts`
+runs hourly and reads each mint exactly once, while it is between **24 hours and
+5 days old**. The lower bound waits for Dune's 24-hour window to close so the
+run is over and the reading is a completed observation rather than a running
+maximum. The upper bound is a product decision: this meta moves fast and
+attention moves on, so an older token is not worth a request.
 
-Provider usage is guarded by an atomic 2,200-request monthly budget, leaving 300
-of the free plan's 2,500 requests as operational headroom. Each sync can reserve
-at most eight chart requests. Captured tokens that are still missing peaks stay
-in the retained queue and are processed oldest-first; reaching the budget never
-removes them from the dashboard.
+That bound also keeps usage permanently inside the free plan. The stored history
+reaches back to 2026-03 (~7.2k mints); reading all of it would cost roughly 3x
+the monthly free allowance to answer questions about tokens nobody is
+researching. The 5-day window is ~60 mints, and steady state equals the arrival
+rate (~15-45/day).
+
+The request uses `type=1h` with `marketCap=true` and `removeOutliers=false`.
+Two provider behaviours, verified against the live API on 2026-07-27, drive
+that choice:
+
+- A response is capped at 2000 candles and returns the **most recent** ones.
+  `time_from` cannot extend coverage backwards, so at `1m` any token with more
+  than 2000 traded minutes silently loses the early history where peaks occur.
+  At `1h` a token's whole life fits inside the cap (~83 days), and an hourly
+  candle's `high` is the max of its minute highs, so brief wicks survive.
+- The raw HTTP parameters are `time_from`/`time_to`. Sending `timeFrom`/`timeTo`
+  is silently ignored and returns the provider's default window.
+
+No budget accounting is needed. The free plan's 3 req/s is enforced by 1-second
+spacing. A provider-wide refusal (401/402/403/429) raises a distinct halt error
+that ends the run **without writing rows**, so pending mints keep their retry
+budget instead of an exhausted quota marking thousands of them permanently
+failed. Readings are flushed to Convex in batches of 10, so a timeout or crash
+never discards work already paid for.
+
+Peaks live only in `observedPeaks`, keyed by mint, and are joined onto tokens at
+read time in `/api/graduated`. Stored snapshots are never rewritten to carry a
+peak, and a token shows the same peak on every date it appeared.
+
+This metric is labeled **observed peak market cap**, not ATH: it is bounded by
+the window actually examined, which each row records.
 
 ## Cache and Snapshot Rules
 
@@ -298,13 +323,11 @@ curl -H "x-admin-refresh-token: $ADMIN_REFRESH_TOKEN" \
 - `duneMetadata` — Dune cache metadata.
 - `dailySnapshots` — one row per UTC snapshot date.
 - `syncRuns` — durable scheduled-sync/backfill audit log; the operational health source.
-- `graduatedTokens` — token rows linked to snapshot dates.
-- `observedPeaks` — permanent per-mint peak cache used across every date.
-- `providerUsage` — atomic monthly external-provider request reservations.
+- `graduatedTokens` — token rows linked to snapshot dates. These never carry a peak.
+- `observedPeaks` — one completed peak reading per mint, with the window it
+  covered and a `status` of `ok`, `empty`, or `failed`.
 
 A single successful snapshot does not prove every 2-hourly run succeeded; check `syncRuns`.
-Successful sync audit rows include the Solana Tracker budget period, used,
-limit, and remaining request counts.
 
 ## Dune Credit Notes
 

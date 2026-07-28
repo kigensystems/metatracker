@@ -7,8 +7,6 @@ export interface DuneGraduatedToken {
   tradeCount: number;
   vwapPrice: number;
   graduatedAt?: number;
-  observedPeakMarketCap?: number;
-  observedPeakAt?: number;
   measuredVolumeUsd?: number;
   buyCount?: number;
   sellCount?: number;
@@ -41,13 +39,6 @@ export interface StoredToken {
   tradeCount?: number;
   createdAt?: number;
   graduatedAt?: number;
-  observedPeakMarketCap?: number;
-  observedPeakAt?: number;
-  observedPeakPriceUsd?: number;
-  observedPeakFetchedAt?: number;
-  observedPeakSource?: string;
-  observedPeakSupply?: number;
-  observedPeakSupplySource?: string;
   measuredVolumeUsd?: number;
   buyCount?: number;
   sellCount?: number;
@@ -286,8 +277,6 @@ function parseDuneRows(rows: Record<string, unknown>[]): DuneGraduatedToken[] {
   return rows
     .map((row) => {
       const graduatedAt = asOptionalTimestamp(row.graduation_time);
-      const observedPeakMarketCap = asOptionalFiniteNumber(row.observed_peak_market_cap);
-      const observedPeakAt = asOptionalTimestamp(row.observed_peak_at);
       const measuredVolumeUsd = asOptionalFiniteNumber(row.volume_usd);
       const buyCount = asOptionalFiniteNumber(row.buy_count);
       const sellCount = asOptionalFiniteNumber(row.sell_count);
@@ -300,8 +289,6 @@ function parseDuneRows(rows: Record<string, unknown>[]): DuneGraduatedToken[] {
         tradeCount: Number(row.trade_count) || 0,
         vwapPrice: Number(row.vwap_token_price) || 0,
         ...(graduatedAt !== undefined ? { graduatedAt } : {}),
-        ...(observedPeakMarketCap !== undefined ? { observedPeakMarketCap } : {}),
-        ...(observedPeakAt !== undefined ? { observedPeakAt } : {}),
         ...(measuredVolumeUsd !== undefined ? { measuredVolumeUsd } : {}),
         ...(buyCount !== undefined ? { buyCount } : {}),
         ...(sellCount !== undefined ? { sellCount } : {}),
@@ -640,8 +627,6 @@ export async function enrichTokens(tokens: DuneGraduatedToken[]): Promise<Enrich
         tradeCount: token.tradeCount || undefined,
         createdAt: dex?.pairCreatedAt || undefined,
         graduatedAt: token.graduatedAt,
-        observedPeakMarketCap: token.observedPeakMarketCap,
-        observedPeakAt: token.observedPeakAt,
         measuredVolumeUsd: token.measuredVolumeUsd,
         buyCount: token.buyCount,
         sellCount: token.sellCount,
