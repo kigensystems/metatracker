@@ -33,7 +33,7 @@ export function inkAlpha(alpha: number): string {
 export const HEADER_HEIGHT = { xs: 57, sm: 65 } as const;
 
 /** Every figure and every label is set in mono; names and prose are not. */
-export const MONO = "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace";
+const MONO = "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace";
 
 /** Small uppercase mono label used for column heads, eyebrows, and stat keys. */
 export const LABEL = {

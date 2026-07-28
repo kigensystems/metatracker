@@ -4,7 +4,7 @@ Forward-looking plan and active risks. Past incidents and rollout notes are in
 [docs/HISTORY.md](docs/HISTORY.md). Architecture and operating instructions are
 in [README.md](README.md) and [AGENTS.md](AGENTS.md). The authoritative pipeline
 audit and next-session starting point are in
-[docs/HANDOFF-2026-07-27.md](docs/HANDOFF-2026-07-27.md).
+[docs/HANDOFF-2026-07-28-pumpfun-migration.md](docs/HANDOFF-2026-07-28-pumpfun-migration.md).
 
 ## Purpose
 
@@ -28,6 +28,12 @@ it must not silently exclude a qualifying runner merely because the token died
 before a later snapshot.
 
 ## What the current app actually receives
+
+> **Superseded in part.** The Dune analysis below still describes what is
+> deployed, but the source itself is being replaced: query `4124453` misses ~95%
+> of graduations. Read
+> [docs/HANDOFF-2026-07-28-pumpfun-migration.md](docs/HANDOFF-2026-07-28-pumpfun-migration.md)
+> alongside this section.
 
 ### Dune: which tokens enter the dashboard
 

@@ -3,8 +3,8 @@
 Branch: `claude/site-ux-improvements-4f5eeb` (worktree `site-ux-improvements-4f5eeb`).
 Nothing in here is deployed. Production is untouched and still runs the old path.
 
-Supersedes nothing — [HANDOFF-2026-07-28.md](HANDOFF-2026-07-28.md) covers the
-prior observed-peak work and is still accurate for what is live today.
+This is the only current handoff; the superseded ones were deleted, and their
+history is in git and [HISTORY.md](HISTORY.md).
 
 ---
 
@@ -28,7 +28,7 @@ local fixture. It is **not wired into the sync functions** and **not deployed**.
 
 ## The core finding
 
-Query `4124453` ([token-sync.ts:143](../netlify/functions/_shared/token-sync.ts))
+Query `4124453` ([token-sync.ts:160](../netlify/functions/_shared/token-sync.ts))
 belongs to `@adam_tehc`, is hardcoded with no env override, and was last updated
 25 days before this session. It detects graduation by matching a single
 hardcoded instruction discriminator:

@@ -34,6 +34,13 @@ Netlify Functions before snapshot writes.
 
 Core production flow:
 
+> **Mid-migration.** Dune query `4124453` is not ours and misses ~95% of
+> graduations (52 rows against 995 in the same 24h window), because it matches a
+> single hardcoded bonding-curve instruction that PumpSwap migrations bypass. A
+> verified pump.fun replacement is committed but not yet wired in. See
+> [docs/HANDOFF-2026-07-28-pumpfun-migration.md](docs/HANDOFF-2026-07-28-pumpfun-migration.md).
+> The steps below describe what is deployed today.
+
 1. Netlify scheduled function runs every 2 hours (00:00, 02:00, … 22:00 UTC).
 2. Fetches Dune query `4124453`.
 3. Enriches tokens through DexScreener in batches.
@@ -105,8 +112,10 @@ Peaks live only in `observedPeaks`, keyed by mint, and are joined onto tokens at
 read time in `/api/graduated`. Stored snapshots are never rewritten to carry a
 peak, and a token shows the same peak on every date it appeared.
 
-This metric is labeled **observed peak market cap**, not ATH: it is bounded by
-the window actually examined, which each row records.
+This metric is labeled **observed peak market cap**, not ATH, *for readings
+derived from candle history*: those are bounded by the window actually examined,
+which each row records. pump.fun's `ath_market_cap` is a genuine all-time high
+and may be labelled as such once wired in — see the migration handoff.
 
 ## Cache and Snapshot Rules
 
