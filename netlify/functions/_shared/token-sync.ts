@@ -1,4 +1,4 @@
-import { withRetries } from "./retry.js";
+import { sleep, withRetries } from "./retry.js";
 
 export interface DuneGraduatedToken {
   mint: string;
@@ -78,10 +78,27 @@ export interface DuneLatestStatus {
   executionId?: string;
 }
 
+/**
+ * A peak reading ready for `observedPeaks.record`. pump.fun reports an
+ * all-time high directly, so unlike the Solana Tracker path there is no candle
+ * window to qualify — the window is the token's whole life.
+ */
+export interface PeakObservation {
+  mint: string;
+  status: "ok";
+  peakMarketCapUsd: number;
+  peakAt?: number;
+  windowFrom: number;
+  windowTo: number;
+  candleInterval: string;
+}
+
 export interface EnrichmentResult {
   tokens: StoredToken[];
   failedEnrichments: string[];
   enrichmentRate: number;
+  /** Empty unless pump.fun supplied an ATH for at least one token. */
+  peakObservations: PeakObservation[];
 }
 
 interface DuneResponseMetadata {
@@ -560,6 +577,145 @@ async function fetchDexScreenerOnce(mint: string): Promise<DexScreenerFetchResul
   return pair ? { pair, fetchedAt: Date.now() } : null;
 }
 
+/**
+ * pump.fun metadata for a coin, taken from the graduated feed.
+ *
+ * DexScreener only carries art and links for teams that have *claimed* their
+ * token profile, which almost no fresh launch has: measured on a live cohort it
+ * gave art for 13 of 37 and a website for 6 of 37. pump.fun is the launch venue
+ * for these tokens and holds the creator's own submission, which covered 37/37
+ * and 28/37 of the same cohort.
+ */
+interface PumpFunMeta {
+  image?: string;
+  website?: string;
+  twitter?: string;
+  telegram?: string;
+  /** Live USD market cap. Within ~1% of DexScreener, and still present for
+   *  dead tokens whose pair DexScreener has dropped. */
+  marketCap?: number;
+  /** All-time-high market cap in USD, and when it happened. Matched a Solana
+   *  Tracker reading to 0.3% on TRUMPFOLIO ($8.94M vs $8.91M). */
+  athMarketCap?: number;
+  athAt?: number;
+}
+
+/**
+ * Community docs put the coins endpoints at roughly 20 req/min. A burst of 65
+ * in a minute drew no 429 in testing, so the ceiling looks soft — this paces at
+ * one page per second regardless. A 24h cohort is ~20 pages, so there is
+ * nothing to win by going faster.
+ */
+const PUMP_REQUEST_SPACING_MS = 1_000;
+
+/** One page of the graduated feed. The list carries full coin objects. */
+const PUMP_PAGE_SIZE = 50;
+/** Stop paging rather than walk the entire history if the cutoff never hits. */
+const PUMP_MAX_PAGES = 40;
+
+function pumpMetaFromCoin(coin: Record<string, unknown>): PumpFunMeta {
+  const text = (value: unknown): string | undefined => {
+    if (typeof value !== 'string') return undefined;
+    const trimmed = value.trim();
+    return trimmed && trimmed !== 'https://' && trimmed !== 'http://' ? trimmed : undefined;
+  };
+  const positive = (value: unknown): number | undefined => {
+    const parsed = asOptionalFiniteNumber(value);
+    return parsed !== undefined && parsed > 0 ? parsed : undefined;
+  };
+
+  return {
+    image: text(coin.image_uri),
+    website: text(coin.website),
+    twitter: text(coin.twitter),
+    telegram: text(coin.telegram),
+    marketCap: positive(coin.usd_market_cap),
+    athMarketCap: positive(coin.ath_market_cap),
+    athAt: positive(coin.ath_market_cap_timestamp),
+  };
+}
+
+export interface PumpGraduatedResult {
+  tokens: DuneGraduatedToken[];
+  /** Metadata straight off the list, so enrichment needs no second request. */
+  meta: Map<string, PumpFunMeta>;
+  createdAt: Map<string, number>;
+  pagesFetched: number;
+}
+
+/**
+ * Graduated tokens straight from the launch venue.
+ *
+ * The Dune query this replaces detects graduation by matching one hardcoded
+ * bonding-curve instruction, and now misses most of them — measured against
+ * this feed it returned 52 for a 24h window that pump.fun reports ~700 for.
+ *
+ * Note the list's own `usd_market_cap` is deliberately ignored: it is the
+ * bonding-curve valuation, which freezes the moment a token graduates. Live
+ * market cap still comes from DexScreener and the peak from Solana Tracker.
+ */
+export async function fetchGraduatedFromPumpFun(
+  windowMs: number = 24 * 60 * 60 * 1000,
+  now: number = Date.now(),
+): Promise<PumpGraduatedResult> {
+  const cutoff = now - windowMs;
+  const tokens: DuneGraduatedToken[] = [];
+  const meta = new Map<string, PumpFunMeta>();
+  const createdAt = new Map<string, number>();
+  const seen = new Set<string>();
+  let pagesFetched = 0;
+
+  for (let page = 0; page < PUMP_MAX_PAGES; page += 1) {
+    const url = `https://frontend-api-v3.pump.fun/coins`
+      + `?offset=${page * PUMP_PAGE_SIZE}&limit=${PUMP_PAGE_SIZE}`
+      + `&sort=created_timestamp&order=DESC&complete=true&includeNsfw=true`;
+
+    const response = await fetch(url, {
+      headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) break;
+
+    const body = await response.json() as unknown;
+    const coins = Array.isArray(body)
+      ? body as Record<string, unknown>[]
+      : ((body as { coins?: Record<string, unknown>[] })?.coins ?? []);
+    if (coins.length === 0) break;
+
+    pagesFetched += 1;
+    let reachedCutoff = false;
+
+    for (const coin of coins) {
+      const mint = typeof coin.mint === 'string' ? coin.mint : null;
+      const created = typeof coin.created_timestamp === 'number' ? coin.created_timestamp : null;
+      if (!mint || created === null) continue;
+
+      if (created < cutoff) {
+        reachedCutoff = true;
+        continue;
+      }
+      if (seen.has(mint)) continue;
+      seen.add(mint);
+
+      tokens.push({
+        mint,
+        symbol: typeof coin.symbol === 'string' ? coin.symbol : '???',
+        // Zero, not a guess: DexScreener supplies the live figure downstream.
+        marketCap: 0,
+        tradeCount: 0,
+        vwapPrice: 0,
+      });
+      meta.set(mint, pumpMetaFromCoin(coin));
+      createdAt.set(mint, created);
+    }
+
+    if (reachedCutoff) break;
+    await sleep(PUMP_REQUEST_SPACING_MS);
+  }
+
+  return { tokens, meta, createdAt, pagesFetched };
+}
+
 async function fetchDexScreener(mint: string): Promise<DexScreenerFetchResult | null> {
   try {
     const result = await withRetries(
@@ -578,18 +734,38 @@ async function fetchDexScreener(mint: string): Promise<DexScreenerFetchResult | 
   }
 }
 
-export async function enrichTokens(tokens: DuneGraduatedToken[]): Promise<EnrichmentResult> {
+export interface EnrichOptions {
+  /**
+   * Metadata already in hand. The graduated feed returns full coin objects, so
+   * that path passes them here rather than re-requesting one mint at a time.
+   */
+  pumpMeta?: Map<string, PumpFunMeta>;
+  /** pump.fun's creation time, which beats DexScreener's pair-created time. */
+  createdAt?: Map<string, number>;
+}
+
+export async function enrichTokens(
+  tokens: DuneGraduatedToken[],
+  options: EnrichOptions = {},
+): Promise<EnrichmentResult> {
   const batchSize = 15;
   const results: StoredToken[] = [];
   const failedEnrichments: string[] = [];
+  const peakObservations: PeakObservation[] = [];
 
   for (let i = 0; i < tokens.length; i += batchSize) {
     const batch = tokens.slice(i, i + batchSize);
-    const dexResults = await Promise.all(batch.map((token) => fetchDexScreener(token.mint)));
+    // pump.fun metadata arrives with the graduated feed, so only DexScreener
+    // is fetched here.
+    const [dexResults, pumpResults] = await Promise.all([
+      Promise.all(batch.map((token) => fetchDexScreener(token.mint))),
+      Promise.resolve(batch.map((token) => options.pumpMeta?.get(token.mint) ?? null)),
+    ]);
 
     const enriched = batch.map((token, index) => {
       const dexResult = dexResults[index];
       const dex = dexResult?.pair;
+      const pump = pumpResults[index];
 
       if (!dexResult) {
         failedEnrichments.push(token.mint);
@@ -610,12 +786,14 @@ export async function enrichTokens(tokens: DuneGraduatedToken[]): Promise<Enrich
         mint: token.mint,
         symbol: token.symbol || dex?.baseToken?.symbol || "???",
         name: dex?.baseToken?.name || token.symbol || "Unknown",
-        image: dex?.info?.imageUrl || undefined,
+        // DexScreener's CDN art is better when it exists; pump.fun covers the
+        // rest, which on a measured cohort was 24 of 37 tokens.
+        image: dex?.info?.imageUrl || pump?.image || undefined,
         bannerImage: dex?.info?.header || dex?.info?.openGraph || undefined,
         // Keep the legacy fields stable while exposing explicit source semantics.
-        marketCap: token.marketCap || dexMarketCap || undefined,
-        duneMarketCap: token.marketCap,
-        duneVwapPrice: token.vwapPrice,
+        marketCap: pump?.marketCap || token.marketCap || dexMarketCap || undefined,
+        duneMarketCap: token.marketCap || undefined,
+        duneVwapPrice: token.vwapPrice || undefined,
         dexMarketCap,
         dexPriceUsd,
         dexFetchedAt: dexResult?.fetchedAt,
@@ -625,7 +803,7 @@ export async function enrichTokens(tokens: DuneGraduatedToken[]): Promise<Enrich
         priceUsd: token.vwapPrice || dexPriceUsd || undefined,
         priceChange24h: dex?.priceChange?.h24 || undefined,
         tradeCount: token.tradeCount || undefined,
-        createdAt: dex?.pairCreatedAt || undefined,
+        createdAt: options.createdAt?.get(token.mint) || dex?.pairCreatedAt || undefined,
         graduatedAt: token.graduatedAt,
         measuredVolumeUsd: token.measuredVolumeUsd,
         buyCount: token.buyCount,
@@ -633,13 +811,30 @@ export async function enrichTokens(tokens: DuneGraduatedToken[]): Promise<Enrich
         sourceExecutionEndedAt: token.sourceExecutionEndedAt,
         linksJson: JSON.stringify(links),
         dexScreenerUrl: links.dexscreener,
-        website: dex?.info?.websites?.[0]?.url || undefined,
-        twitter: socials.twitter || undefined,
-        telegram: socials.telegram || undefined,
+        website: dex?.info?.websites?.[0]?.url || pump?.website || undefined,
+        twitter: socials.twitter || pump?.twitter || undefined,
+        telegram: socials.telegram || pump?.telegram || undefined,
       };
     });
 
     results.push(...enriched);
+
+    batch.forEach((token, index) => {
+      const pump = pumpResults[index];
+      if (!pump?.athMarketCap) return;
+      const created = options.createdAt?.get(token.mint);
+      peakObservations.push({
+        mint: token.mint,
+        status: "ok",
+        peakMarketCapUsd: pump.athMarketCap,
+        peakAt: pump.athAt,
+        // Genuinely all-time: pump.fun tracks this from the token's creation,
+        // so the window is not the bounded one the candle reader had to use.
+        windowFrom: created ?? pump.athAt ?? Date.now(),
+        windowTo: Date.now(),
+        candleInterval: "reported",
+      });
+    });
 
     if (i + batchSize < tokens.length) {
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -654,5 +849,6 @@ export async function enrichTokens(tokens: DuneGraduatedToken[]): Promise<Enrich
     tokens: results,
     failedEnrichments,
     enrichmentRate,
+    peakObservations,
   };
 }

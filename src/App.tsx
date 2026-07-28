@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Header } from './components/Header';
-import { DatePicker } from './components/DatePicker';
+import { ControlBar } from './components/ControlBar';
 import { MetaSummary } from './components/MetaSummary';
 import { TokenList } from './components/TokenList';
 import { FreshnessBar } from './components/FreshnessBar';
@@ -9,6 +9,7 @@ import { LoadingScreen } from './components/LoadingScreen';
 import { EmptyState } from './components/EmptyState';
 import type { DataFreshness, GraduatedToken, SortKey } from './lib/types';
 import { parseGraduatedPayload } from './lib/api-contract';
+import { hasClearedPeak } from './lib/peak';
 
 const API_BASE =
   import.meta.env.VITE_API_BASE ?? (import.meta.env.DEV ? '/.netlify/functions' : '/api');
@@ -22,7 +23,6 @@ interface AvailableDate {
 
 interface CachedData {
   tokens: GraduatedToken[];
-  lastUpdated: Date;
   freshness: DataFreshness;
 }
 
@@ -34,7 +34,6 @@ function App() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [availableDates, setAvailableDates] = useState<AvailableDate[]>([]);
   const [liveDataDate, setLiveDataDate] = useState<string | null>(null);
@@ -42,6 +41,7 @@ function App() {
   const [page, setPage] = useState(1);
   const [freshness, setFreshness] = useState<DataFreshness | null>(null);
   const [selectedToken, setSelectedToken] = useState<GraduatedToken | null>(null);
+  const [qualifiedOnly, setQualifiedOnly] = useState(false);
 
   // Client-side cache for fetched data
   const cache = useRef<Map<string, CachedData>>(new Map());
@@ -72,7 +72,6 @@ function App() {
         if (cacheKey === 'live') {
           setLiveTokenCount(cached.tokens.length);
         }
-        setLastUpdated(cached.lastUpdated);
         setLoading(false);
         setError(null);
         return;
@@ -99,20 +98,15 @@ function App() {
         throw new Error(data.error);
       }
 
-      const {
-        tokens: fetchedTokens,
-        updatedAt,
-        freshness: nextFreshness,
-      } = parseGraduatedPayload(data);
+      // Capture time comes from `freshness`, which the freshness bar renders.
+      const { tokens: fetchedTokens, freshness: nextFreshness } = parseGraduatedPayload(data);
 
       setTokens(fetchedTokens);
-      setLastUpdated(updatedAt);
       setFreshness(nextFreshness);
 
       // Store in cache
       cache.current.set(cacheKey, {
         tokens: fetchedTokens,
-        lastUpdated: updatedAt,
         freshness: nextFreshness,
       });
 
@@ -151,9 +145,21 @@ function App() {
     setSelectedToken(null);
   }, []);
 
+  const handleQualifiedOnlyChange = useCallback((value: boolean) => {
+    setQualifiedOnly(value);
+    setPage(1);
+  }, []);
+
+  const qualifiedCount = useMemo(() => tokens.filter(hasClearedPeak).length, [tokens]);
+
+  const filteredTokens = useMemo(
+    () => (qualifiedOnly ? tokens.filter(hasClearedPeak) : tokens),
+    [tokens, qualifiedOnly],
+  );
+
   // Sort by the active metric, pushing tokens missing that metric to the bottom.
   const sortedTokens = useMemo(() => {
-    const arr = [...tokens];
+    const arr = [...filteredTokens];
     arr.sort((a, b) => {
       const av = a[sortKey];
       const bv = b[sortKey];
@@ -163,9 +169,9 @@ function App() {
       return sortDir === 'desc' ? bv - av : av - bv;
     });
     return arr;
-  }, [tokens, sortKey, sortDir]);
+  }, [filteredTokens, sortKey, sortDir]);
 
-  // "Current meta" highlights, computed across the full set (not just the page).
+  // Snapshot highlights describe the whole cohort, so they ignore the filters.
   const summary = useMemo(() => {
     const maxBy = (key: SortKey) =>
       tokens.reduce<GraduatedToken | null>((best, token) => {
@@ -174,12 +180,10 @@ function App() {
         const bestValue = best?.[key];
         return bestValue == null || bestValue < value ? token : best;
       }, null);
-    const totalVolume = tokens.reduce((sum, token) => sum + (token.volume24h ?? 0), 0);
     return {
       topVolume: maxBy('volume24h'),
       topGainer: maxBy('priceChange24h'),
-      topMarketCap: maxBy('marketCap'),
-      totalVolume,
+      topPeak: maxBy('observedPeakMarketCap'),
     };
   }, [tokens]);
 
@@ -207,31 +211,35 @@ function App() {
     <div className="min-h-screen bg-void relative">
       <div className="relative z-10">
         <Header
-          lastUpdated={lastUpdated}
+          freshness={error ? null : freshness}
           onRefresh={() => fetchTokens(true)}
           loading={loading}
         />
 
-        <main className="max-w-[1200px] mx-auto px-4 sm:px-6 pb-16">
-          <div className="pt-8 sm:pt-12 pb-6">
-            <h2 className="text-[1.75rem] sm:text-[2.15rem] leading-tight font-semibold tracking-[-0.035em] text-[#f1f3f4]">
+        <main className="max-w-[1120px] mx-auto px-4 sm:px-6 pb-16">
+          <div className="pt-8 sm:pt-11 pb-5">
+            <h2 className="text-[1.75rem] sm:text-[2.1rem] leading-tight font-semibold tracking-[-0.03em] text-[var(--color-text)]">
               Recent graduates
             </h2>
-            <p className="mt-2 max-w-2xl text-sm sm:text-[0.95rem] leading-6 text-[#9ba2ab]">
-              Track every recently graduated token observed across the source snapshots. Open any token for sources, timing, and research links.
+            <p className="mt-2 max-w-xl text-sm leading-6 text-ghost">
+              Every token that graduated in the snapshot, measured against the $100K peak bar.
+              Open one for sources, timing, and research links.
             </p>
           </div>
 
-          <div>
-            <DatePicker
-              selectedDate={selectedDate}
-              availableDates={availableDates}
-              onDateChange={handleDateChange}
-              isLoading={loading}
-              liveDataDate={liveDataDate}
-              liveTokenCount={liveTokenCount ?? undefined}
-            />
-          </div>
+          <ControlBar
+            selectedDate={selectedDate}
+            availableDates={availableDates}
+            onDateChange={handleDateChange}
+            isLoading={loading}
+            liveDataDate={liveDataDate}
+            liveTokenCount={liveTokenCount ?? undefined}
+            qualifiedOnly={qualifiedOnly}
+            onQualifiedOnlyChange={handleQualifiedOnlyChange}
+            qualifiedCount={qualifiedCount}
+            shownCount={sortedTokens.length}
+            totalCount={tokens.length}
+          />
 
           <FreshnessBar freshness={error ? null : freshness} />
 
@@ -253,11 +261,18 @@ function App() {
               <MetaSummary
                 topVolume={summary.topVolume}
                 topGainer={summary.topGainer}
-                topMarketCap={summary.topMarketCap}
-                totalVolume={summary.totalVolume}
+                topPeak={summary.topPeak}
+                qualifiedCount={qualifiedCount}
                 tokenCount={tokens.length}
                 onSelect={setSelectedToken}
               />
+              {sortedTokens.length === 0 ? (
+                <EmptyState
+                  type="empty"
+                  message="No token in this snapshot has a recorded peak at or above $100K."
+                  onReset={() => setQualifiedOnly(false)}
+                />
+              ) : (
               <TokenList
                 tokens={paginatedTokens}
                 totalCount={sortedTokens.length}
@@ -269,6 +284,7 @@ function App() {
                 onPageChange={setPage}
                 onTokenSelect={setSelectedToken}
               />
+              )}
             </>
           )}
         </main>

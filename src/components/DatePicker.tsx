@@ -1,4 +1,5 @@
 import { Box, Button, Typography } from '@mui/material';
+import { accentAlpha, FIGURE, inkAlpha, LABEL } from '../lib/theme';
 
 interface AvailableDate {
   date: string;
@@ -54,14 +55,9 @@ export function DatePicker({
         mb: 1.5,
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 1.25 }}>
-        <Typography variant="subtitle2" sx={{ fontWeight: 650, color: 'text.primary' }}>
-          Snapshot
-        </Typography>
-        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-          Tokens retained from source snapshots
-        </Typography>
-      </Box>
+      <Typography sx={{ ...LABEL, color: 'text.secondary', display: 'block', mb: 1 }}>
+        Snapshot
+      </Typography>
 
       <Box
         sx={{
@@ -72,6 +68,9 @@ export function DatePicker({
           pb: 0.5,
           scrollbarWidth: 'none',
           '&::-webkit-scrollbar': { display: 'none' },
+          // Fades the last chip so a scrollable row reads as scrollable.
+          maskImage: 'linear-gradient(to right, #000 calc(100% - 28px), transparent)',
+          WebkitMaskImage: 'linear-gradient(to right, #000 calc(100% - 28px), transparent)',
         }}
       >
         <Button
@@ -83,19 +82,21 @@ export function DatePicker({
             minWidth: 0,
             flexShrink: 0,
             px: 1.5,
-            py: 0.65,
+            py: 0.6,
             border: 1,
-            borderRadius: '999px',
+            borderRadius: '2px',
             whiteSpace: 'nowrap',
-            fontSize: '0.8rem',
+            fontFamily: FIGURE.fontFamily,
+            fontSize: '0.75rem',
+            fontWeight: 500,
             ...(isLiveSelected
               ? {
-                  backgroundColor: 'rgba(114, 211, 140, 0.12)',
-                  borderColor: 'rgba(114, 211, 140, 0.34)',
+                  backgroundColor: accentAlpha(0.13),
+                  borderColor: accentAlpha(0.38),
                   color: 'text.primary',
                   '&:hover': {
-                    backgroundColor: 'rgba(114, 211, 140, 0.17)',
-                    borderColor: 'rgba(114, 211, 140, 0.4)',
+                    backgroundColor: accentAlpha(0.19),
+                    borderColor: accentAlpha(0.45),
                   },
                 }
               : {
@@ -112,9 +113,9 @@ export function DatePicker({
               sx={{
                 ml: 0.75,
                 display: { xs: 'none', sm: 'inline' },
-                fontSize: '0.75rem',
-                fontVariantNumeric: 'tabular-nums',
-                color: 'text.secondary',
+                ...FIGURE,
+                fontSize: '0.7rem',
+                color: 'text.disabled',
               }}
             >
               {liveTokenCount}
@@ -134,18 +135,20 @@ export function DatePicker({
                 minWidth: 0,
                 flexShrink: 0,
                 px: 1.5,
-                py: 0.65,
+                py: 0.6,
                 border: 1,
-                borderRadius: '999px',
+                borderRadius: '2px',
                 whiteSpace: 'nowrap',
-                fontSize: '0.8rem',
+                fontFamily: FIGURE.fontFamily,
+                fontSize: '0.75rem',
+                fontWeight: 500,
                 ...(isSelected
                   ? {
-                      backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                      backgroundColor: inkAlpha(0.06),
                       borderColor: 'text.disabled',
                       color: 'text.primary',
                       '&:hover': {
-                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                        backgroundColor: inkAlpha(0.09),
                         borderColor: 'text.secondary',
                       },
                     }
@@ -165,9 +168,9 @@ export function DatePicker({
                 sx={{
                   ml: 0.75,
                   display: { xs: 'none', sm: 'inline' },
-                  fontSize: '0.75rem',
-                  fontVariantNumeric: 'tabular-nums',
-                  color: 'text.secondary',
+                  ...FIGURE,
+                  fontSize: '0.7rem',
+                  color: 'text.disabled',
                 }}
               >
                 {tokenCount}
