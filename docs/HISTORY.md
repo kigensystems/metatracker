@@ -6,6 +6,68 @@ operations docs see [README.md](../README.md).
 
 ---
 
+## 2026-07-31 — pump.fun pipeline deployed; first production cohort captured
+
+Commit `8bc125a`. Convex `dusty-ox-307` pushed first with `npx convex dev
+--once`, then `main` to Netlify. Both crons re-registered (`scheduled-sync`
+`0 */2 * * *`, `peak-backfill` `20 * * * *`).
+
+**The Convex-before-Netlify order was load-bearing, and it was verified rather
+than assumed.** `/api/graduated` calls the new `dailySnapshots.latest` query;
+run against production Convex *before* the push it failed with `Could not find
+public function for 'dailySnapshots:latest'`. Deploying Netlify first would have
+500'd every dashboard load.
+
+### First run
+
+`POST /api/scheduled-sync` returns **403** — Netlify blocks external invocation
+of scheduled functions, which is the right behaviour and quietly closes the
+"gate public invocation" reliability item in PLAN.md. To avoid waiting for the
+cron, the real handler was compiled and executed locally against production
+Convex:
+
+```
+809 graduated tokens from 17 pages | 100% DexScreener enrichment (0 failures)
+809/809 reported ATHs recorded     | 818 stored, 9 Dune-era rows preserved
+211.9s, retryCount 0               | health ok, feedAgeMinutes 9
+```
+
+The dashboard went from **23 tokens / 4 clearing `$100k`** to **818 / 298**.
+Payload ~1.0 MB in ~1.5s. 815 of 818 rows carry a peak: 809 reported ATHs plus
+6 surviving candle-derived rows, each labelled correctly in the drawer.
+
+This settled every scale question that had been open: `storeSnapshot` handled an
+809-token transaction, `observedPeaks.byMints` was measured separately at 3,000
+mints in ~1s, and `feedAgeMinutes: 9` confirmed the new feed-freshness health
+tier reads the newest coin rather than a Dune execution age.
+
+### One bug found and fixed before the push
+
+The pager did `if (!response.ok) break;`, so a page failing part-way through the
+walk returned a plausible-looking short cohort that the sync stored and reported
+as **success** — a broken fetch indistinguishable from a quiet day. The empty-feed
+guard only caught total failure. `fetchGraduatedFromPumpFun` now returns
+`complete: boolean`, true only when it reaches the window edge or the feed
+genuinely ends, and the sync refuses to store a truncated cohort. Paging still
+degrades rather than throwing, preserving the tested invariant.
+
+Two other suspected defects were **tested and disproven** rather than "fixed"
+speculatively: `observedPeaks.byMints` at 20x scale, and the API payload size.
+
+### Still unproven
+
+**pump.fun has never been fetched successfully from a Netlify IP.** Every
+measurement, including the run that wrote this snapshot, came from a residential
+IP. The pre-flight probe was skipped by the owner's decision on 2026-07-30. The
+first *scheduled* run is the real test; an empty feed is the signature of blocked
+datacenter egress, and the sync will fail loudly rather than store it.
+
+Also unresolved, and the highest-value open question: 484 of 850 sampled coins
+have a live `pump_swap_pool` yet report an ATH below the graduation threshold.
+See [OPEN-ITEMS.md](OPEN-ITEMS.md).
+
+---
+
 ## 2026-07-30 — pump.fun pipeline wired and verified locally (not deployed)
 
 The migration prepared on 2026-07-28/29 was implemented. Production still runs

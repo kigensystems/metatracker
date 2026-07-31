@@ -1,11 +1,11 @@
 # Open items
 
 Things deliberately left unresolved, with enough context to pick them up cold.
-Opened 2026-07-30 when the pump.fun pipeline was committed.
+Opened 2026-07-30 when the pump.fun pipeline was committed; pruned 2026-07-31
+after the first production run settled several of them.
 
 This is **not** the deploy checklist — that lives in [PLAN.md](../PLAN.md), and
-so does the post-deploy retirement of the Dune and Solana Tracker code. Nothing
-here blocks the push.
+so does the post-deploy retirement of the Dune and Solana Tracker code.
 
 ---
 
@@ -62,49 +62,28 @@ missed — worth measuring before treating the cohort as complete.
 
 ---
 
-## 2. Verify on the first production run
+## 2. Settled by the first production run (2026-07-31)
 
-The write path has **never been executed** — not locally, not against Convex.
-Local verification exercised the engine (`fetchGraduatedFromPumpFun` +
-`enrichTokens`) and the read path, but never `scheduled-sync`'s handler, its
-Convex writes, its `syncRuns` audit row, or its peak recording.
+Kept as a record so nobody re-opens them:
 
-Check after the first cron fires:
+- **`scheduled-sync`'s write path works.** 809 tokens, 17 pages, 100%
+  DexScreener enrichment, 809/809 peaks recorded, 211.9s, `retryCount: 0`.
+- **`storeSnapshot` survives cohort scale** — an 809-token Convex transaction,
+  20x anything it had done before. The union preserved 9 Dune-era rows that
+  dropped out of the window, so 818 were stored and nothing was lost.
+- **`observedPeaks.byMints` scales** — measured at 3,000 mints in ~1s.
+- **Payload growth is fine** — 818 tokens served as ~1.0 MB in ~1.5s, against
+  Netlify's 6 MB limit. Roughly 1,245 bytes/token, so the ceiling is ~4,800
+  tokens. Worth re-checking if the daily union ever approaches that.
+- **Both peak kinds coexist** — 809 reported ATHs alongside 6 surviving
+  candle-derived rows, each labelled correctly in the drawer.
+- **`DatePicker`'s date tabs render** against real stored history.
 
-- `/api/health` returns `ok: true` with a sane `feedAgeMinutes`.
-- The `syncRuns` row shows `status: success` and a token count in the hundreds.
-- **`storeSnapshot` survived the cohort size.** It inserts every incoming token
-  in one Convex transaction — ~850 inserts plus deletes, against ~50 before.
-  Within documented Convex write limits, but never exercised at this scale. A
-  failure here is loud (the mutation throws, the run is marked failed, the
-  previous snapshot stands).
-- Art and links populated on new rows; peaks labelled `ATH market cap` in the
-  drawer, older rows still `Observed peak MC`.
-
-**Response payload grew ~20x.** Measured 1,231 bytes/token, so ~1 MB at 850
-tokens and ~3.5 MB if a day's union reaches 3,000. Netlify's limit is 6 MB —
-fine now, but the daily union grows through the UTC day, so watch it.
-
-`observedPeaks.byMints` was tested at scale against production and is fine:
-3,000 mints in ~1s.
+Still not exercised: `LoadingScreen`, and `EmptyState`'s error variant.
 
 ---
 
-## 3. Not visually verified
-
-Local UI verification ran against a fixture with no stored history, so these
-never rendered:
-
-- `DatePicker`'s date tabs (only the "Latest" tab ever appeared).
-- `LoadingScreen`, and `EmptyState`'s error variant.
-
-These are all from the earlier paper-palette rebuild, which was already
-uncommitted when the migration work started. They typecheck and build; they have
-simply not been looked at in a browser this session.
-
----
-
-## 4. Code quality, deferred
+## 3. Code quality, deferred
 
 Found by `/simplify`, none of them defects:
 
@@ -124,12 +103,12 @@ Found by `/simplify`, none of them defects:
 
 ---
 
-## 5. Latent risk to remember
+## 4. Latent risk to remember
 
 `peak-backfill` still runs hourly against Solana Tracker. It stays cheap only
 because pump.fun now writes a peak row for essentially every token, so
 `observedPeaks.pending` skips them. **If pump.fun ever stops returning
 `ath_market_cap`, every new mint becomes pending** and the job would quietly
 start burning Solana Tracker quota at ~20x the rate it was designed for
-(capacity is 150/run hourly against a 2,500/month free plan). Retiring
-`peak-backfill` after the deploy removes this entirely — see PLAN.md.
+(capacity is 150/run hourly against a 2,500/month free plan). The retirement
+step in PLAN.md removes this entirely.

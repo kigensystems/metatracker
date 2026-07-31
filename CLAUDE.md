@@ -96,12 +96,18 @@ pump.fun supplies discovery, art, links, live market cap and a reported ATH;
 DexScreener adds volume, liquidity and 24h change only; `/api/graduated` is a
 pure Convex reader that calls no source at all.
 
-**Wired and verified locally on 2026-07-30, not yet deployed.** Production runs
-the previous Dune pipeline until the next deploy, and the Dune code path stays
-in the tree as the rollback reference until a production run is verified — see
+**Deployed and verified in production on 2026-07-31.** The first run captured
+809 graduates over 17 pages with 100% DexScreener enrichment and a reported ATH
+on every one, taking the dashboard from 23 tokens and 4 clearing `$100k` to 818
+and 298. The Dune code path stays in the tree until the retirement step in
 [PLAN.md](PLAN.md). The query it replaces (`4124453`, third-party) missed ~95%
 of graduations: 52 rows against 995 in the same 24h window, because it matches
 one hardcoded bonding-curve instruction that PumpSwap migrations bypass.
+
+**Not yet proven: pump.fun answering a Netlify IP.** Every successful fetch so
+far, including the one that wrote the first production snapshot, came from a
+residential IP. pump.fun is Cloudflare-fronted, so the first *scheduled* run is
+the real test — see PLAN.md step 1 before assuming the transport is settled.
 
 ## Stack
 

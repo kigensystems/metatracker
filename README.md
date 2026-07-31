@@ -34,10 +34,11 @@ reported ATH arrives with discovery and is written to `observedPeaks`.
 
 Core production flow:
 
-> **Wired and verified locally on 2026-07-30, not yet deployed.** Production
-> still runs the previous Dune pipeline until the next deploy. The evidence
-> behind the change is [docs/HISTORY.md](docs/HISTORY.md)'s 2026-07-28/29
-> entry; what remains is in [PLAN.md](PLAN.md).
+> **Deployed and verified in production 2026-07-31.** The first run captured
+> 809 graduates with 100% DexScreener enrichment; the dashboard went from 23
+> tokens to 818. One thing is still unproven — pump.fun has never been fetched
+> successfully from a Netlify IP, only from a residential one. Evidence is in
+> [docs/HISTORY.md](docs/HISTORY.md); what remains is in [PLAN.md](PLAN.md).
 
 1. Netlify scheduled function runs every 2 hours (00:00, 02:00, … 22:00 UTC).
 2. Pages the pump.fun graduated feed back 24 hours.

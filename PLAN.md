@@ -18,54 +18,61 @@ section.
 
 ## Current state
 
-**Implemented and verified locally on 2026-07-30; not deployed.** Production
-still runs the Dune pipeline until the next push to `main`.
+**Deployed and verified in production on 2026-07-31.** Convex `dusty-ox-307`
+and Netlify are both on commit `8bc125a`, with both crons registered.
 
-Wired: `scheduled-sync` discovers through pump.fun `/coins?complete=true`,
-enriches through DexScreener at 5 requests in flight per second, stores the
-snapshot with the capture time as its source timestamp, and records each
-reported ATH into `observedPeaks` in batches of 50. `/api/graduated` is a pure
-Convex reader — the live-fetch, force-refresh and Dune freshness-comparison
-paths are gone. Health's second staleness tier now measures feed freshness (the
-newest creation time the feed offered) instead of a Dune execution age.
+`scheduled-sync` discovers through pump.fun `/coins?complete=true`, enriches
+through DexScreener at 5 requests in flight per second, stores the snapshot with
+the capture time as its source timestamp, and records each reported ATH into
+`observedPeaks` in batches of 50. `/api/graduated` is a pure Convex reader — the
+live-fetch, force-refresh and Dune freshness-comparison paths are gone. Health's
+second staleness tier measures feed freshness (the newest creation time the feed
+offered) instead of a Dune execution age.
 
-Verified against the live API end to end, without deploying or writing to
-Convex: 34 graduates in a one-hour window, 100% DexScreener coverage with
-non-empty liquidity *and* volume for all of them, 100% art, 100% reported ATH,
-at 5.0 tokens/sec. The UI was driven against that cohort — art, links, peaks,
-the `Cleared $100K` filter, and the drawer's source-timing block all render.
+The first production run:
+
+```
+809 graduated tokens from 17 pages | 100% DexScreener enrichment
+809/809 reported ATHs recorded     | 818 stored (9 Dune-era rows preserved)
+211.9s total, retryCount 0         | /api/health ok, feedAgeMinutes 9
+```
+
+The dashboard went from 23 tokens and 4 clearing `$100k` to **818 and 298**.
+Payload is ~1.0 MB served in ~1.5s. `storeSnapshot` handled an 809-token
+transaction — 20x anything it had done before — and `observedPeaks.byMints`
+was separately measured at 3,000 mints in ~1s.
 
 Still on Dune: `POST /api/backfill` only. `peak-backfill` + Solana Tracker still
-run and still own the peaks for every row captured before the migration.
+run and still own the peaks for the 6 pre-migration rows that carry one.
 
 ## What remains
 
-Open questions and deferred cleanups that are *not* deploy steps live in
-[docs/OPEN-ITEMS.md](docs/OPEN-ITEMS.md) — read it before assuming the
-pump.fun data is fully understood.
+Open questions and deferred cleanups live in
+[docs/OPEN-ITEMS.md](docs/OPEN-ITEMS.md) — read it before assuming the pump.fun
+data is fully understood.
 
-### 1. Deploy, in dependency order
+### 1. Confirm pump.fun answers a Netlify IP — do this first
 
-1. `npx convex dev --once` (live store is `dusty-ox-307`; never
-   `npx convex deploy` — see AGENTS guardrails). **This order is load-bearing
-   now, not just prudent:** `/api/graduated` calls the new
-   `dailySnapshots.latest` query, so deploying Netlify first breaks every
-   dashboard load until Convex catches up.
-2. Push to `main` → Netlify.
-3. Verify deploy metadata registers **both** schedules: `scheduled-sync`
-   (`0 */2 * * *`) and `peak-backfill` (`20 * * * *`). TypeScript passing does
-   not prove a cron registered.
-4. Watch one scheduled run end-to-end: `/api/health` OK, snapshot row count
-   ~20x larger, art/links/peaks populated, drawer sane.
+**This is the one thing the deploy did not prove.** The pre-flight probe was
+skipped by the owner's decision, and the first production snapshot was written
+by running the real handler locally, from a residential IP. pump.fun is
+Cloudflare-fronted and may treat datacenter egress differently, so **no
+successful fetch has ever been made from Netlify.**
 
-**The pre-flight probe was skipped by the owner's decision.** Every measurement
-so far ran from a residential IP, and pump.fun is Cloudflare-fronted; datacenter
-egress may be treated differently. If the first scheduled run returns an empty
-feed, that is the likely cause — the sync refuses to store an empty cohort, so
-the failure is loud and the previous snapshot survives. The migration would then
-need a different transport.
+Check the first *scheduled* run (any even UTC hour):
 
-### 2. Retire what the migration obsoletes (only after step 1 is verified)
+```bash
+curl -s https://metratrackerapp.netlify.app/api/health | python3 -m json.tool
+```
+
+A `syncRuns` row with `status: success` and a token count in the hundreds means
+the transport is fine and this item closes. An empty feed is the signature of
+blocked egress — the sync refuses to store an empty cohort, so the failure is
+loud, the previous snapshot survives, and health goes red within ~4.5h with the
+GitHub monitor opening an issue. The fix would then be a different transport
+(proxy or a server-side fetch with browser-ish headers), not a data change.
+
+### 2. Retire what the migration obsoletes (only after step 1 is confirmed)
 
 Deleting these early would remove the rollback reference, so they wait.
 
@@ -111,6 +118,32 @@ regenerating, or you will screenshot stale data; and **check that port 8899 is
 actually yours** — a fixture server left running by an earlier session answers
 happily with a days-old cohort, and nothing about the response says so.
 
+### Running a real Netlify function without deploying
+
+The fixture loop above never executes the handlers themselves, which is how the
+write path stayed unproven right up to deploy day. To run one for real, compile
+it to CommonJS **inside the project** so `node_modules` resolves, copy in the
+generated Convex client, and call the exported handler:
+
+```bash
+npx tsc --target ES2022 --module CommonJS --moduleResolution node --strict \
+  --skipLibCheck --esModuleInterop --outDir node_modules/.cache/fn-run \
+  netlify/functions/scheduled-sync.ts
+mkdir -p node_modules/.cache/fn-run/convex
+cp -R convex/_generated node_modules/.cache/fn-run/convex/_generated
+```
+
+Then a driver that sets `process.env.CONVEX_URL` (the value of `VITE_CONVEX_URL`
+in `.env.local`; it is public, it ships in the client bundle) and awaits
+`require('./netlify/functions/scheduled-sync.js').default(new Request('http://local'), {})`.
+
+`tsc` emits despite the `Cannot find name 'process'` error — that is expected
+without `@types/node` and does not block the run. Delete the cache directory
+afterwards. **This writes to whichever Convex deployment `CONVEX_URL` points
+at**, so it is a real production write when pointed at `dusty-ox-307` — which is
+exactly how the first pump.fun snapshot was captured, and it proved the
+809-token `storeSnapshot` transaction that no local fixture could.
+
 ## Preservation contract
 
 The current production iteration must keep working throughout. Existing Convex
@@ -147,11 +180,12 @@ are a compatibility contract:
 
 ## Reliability work that should not derail the product change
 
-- [ ] Gate public invocation of `/api/scheduled-sync` without breaking Netlify
-      scheduled invocations. Netlify's non-public scheduled functions have a
-      30-second limit, while this enrichment job needs the 15-minute background
-      runtime; use a scheduled dispatcher plus an authenticated background
-      worker rather than trusting a spoofable request body.
+- [x] ~~Gate public invocation of `/api/scheduled-sync`.~~ Closed 2026-07-31:
+      `POST /api/scheduled-sync` returns **403** in production. Netlify already
+      blocks external invocation of scheduled functions while still granting
+      them the 15-minute background runtime, so the dispatcher-plus-worker
+      design this item proposed is unnecessary. To run one on demand, execute
+      the handler locally against `CONVEX_URL` — see the verification loop.
 
 Completed reliability items are recorded in [docs/HISTORY.md](docs/HISTORY.md).
 
