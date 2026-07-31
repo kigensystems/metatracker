@@ -11,6 +11,24 @@ export const list = query({
   },
 });
 
+/**
+ * The most recent snapshot, which the dashboard's default view serves.
+ *
+ * Ordered on the `by_date` index rather than by insertion time: a backfill
+ * inserting an older date later would otherwise become "latest" and the live
+ * tab would quietly show that old cohort.
+ */
+export const latest = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db
+      .query("dailySnapshots")
+      .withIndex("by_date")
+      .order("desc")
+      .first();
+  },
+});
+
 export const byDate = query({
   args: { date: v.string() },
   handler: async (ctx, args) => {

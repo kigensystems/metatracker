@@ -12,6 +12,7 @@ import {
   getErrorMessage,
   isDuneExecutionPendingError,
   isRetryableSyncError,
+  isTerminalFailureState,
 } from "./_shared/token-sync";
 
 const headers = {
@@ -86,14 +87,6 @@ function buildWindow(date: string, slotHour: 0 | 12 | undefined) {
     windowEnd: windowEndDate.toISOString(),
     slot: getScheduledSlot(windowStartDate),
   };
-}
-
-function isTerminalExecutionFailure(state: string): boolean {
-  return state === "QUERY_STATE_FAILED"
-    || state === "QUERY_STATE_CANCELED"
-    || state === "QUERY_STATE_CANCELLED"
-    || state === "QUERY_STATE_EXPIRED"
-    || state === "QUERY_STATE_COMPLETED_PARTIAL";
 }
 
 function logRetry(stage: string, event: RetryEvent) {
@@ -190,7 +183,7 @@ export default async function handler(request: Request, _context: Context) {
     if (executionId) {
       const status = await fetchDuneExecutionStatus(duneApiKey, executionId);
       if (status.state !== "QUERY_STATE_COMPLETED") {
-        if (isTerminalExecutionFailure(status.state)) {
+        if (isTerminalFailureState(status.state)) {
           throw new Error(`Dune execution ${executionId} ended as ${status.state}: ${status.error?.message || "no error detail"}`);
         }
 

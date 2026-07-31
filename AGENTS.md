@@ -3,30 +3,39 @@
 Canonical instructions for agents working in this repository. Keep
 [CLAUDE.md](CLAUDE.md) aligned for Claude compatibility.
 
-Quick reference for working in this repo. Deeper docs: [README.md](README.md).
-Forward plan: [PLAN.md](PLAN.md). Past incidents + changelog:
-[docs/HISTORY.md](docs/HISTORY.md). Authoritative next-session handoff:
-[docs/HANDOFF-2026-07-28-pumpfun-migration.md](docs/HANDOFF-2026-07-28-pumpfun-migration.md).
+## Mission
 
-## Product mission
+meta.tracker exists so its owner — a developer who launches his own Solana
+memecoins rather than trading them — can read the current meta without being
+chronically online.
 
-meta.tracker is a personal research dashboard for a solo memecoin creator. Its
-target cohort is recently graduated tokens that also reached a defensible peak
-market cap of roughly `$100k+`, including tokens that later died. Its job is to
-make a fast, hyper-competitive market understandable without requiring the user
-to watch launches all day. The dashboard should help answer:
+Memecoins run on speculation and narrative, and the narrative turns over
+constantly. Knowing what's working normally means living on X, sitting on the
+new-pairs feed, and watching which projects get buys — massive information
+overload. This tool replaces that with a glance: the tokens that performed well
+each day, in one place, each with its art, name, and direct links to its
+website and socials.
 
-1. Which recent tokens both graduated and crossed the `$100k+` threshold?
-2. Which launches performed well, including brief runners that later died?
-3. What names, visuals, niches, and ideas appear to be attracting buyers?
-4. Which tokens are worth opening for deeper manual research?
-5. Eventually, which hours and weekdays offer the strongest conditions for a
-   solo creator to launch?
+The dashboard's job ends at the handoff: surface the winners, link out to their
+websites and socials. Working out *why* something worked is the owner's
+judgement, done off-site — the tool does not interpret, score, or classify.
 
-This is not a general analytics product or an automated trading system. The
-current product is an exploratory dashboard. Generated briefings and tools for
-evaluating the user's own concepts are later possibilities, after the data and
-core UX are trustworthy and polished.
+A token that ran and then died still counts. A dead runner is evidence of what
+caught attention, and current price must never erase it.
+
+The owner competes on execution — the site, the art, the socials, and narrative
+fit. Distribution comes entirely from the product itself, not from an existing
+audience. That is why art quality and outbound links are load-bearing features,
+not decoration.
+
+Reading order: this file is enough for most work. [PLAN.md](PLAN.md) tracks
+what remains of the pump.fun migration — read it **before touching the sync
+path or peak data**; the evidence behind it is
+[docs/HISTORY.md](docs/HISTORY.md)'s 2026-07-28/29 entry. Everything else is
+reference, not required reading: [docs/OPEN-ITEMS.md](docs/OPEN-ITEMS.md)
+(known unknowns and deferred cleanups), [README.md](README.md) (architecture +
+ops mechanics), [docs/HISTORY.md](docs/HISTORY.md) (past incidents + changelog).
+Where this file and another disagree, this file wins; fix the other.
 
 ## Success definition and product priorities
 
@@ -37,13 +46,19 @@ core UX are trustworthy and polished.
   additional upside rather than a different definition of success.
 - Call the metric **observed peak market cap**, not ATH, for anything derived
   from candle history — that coverage is bounded and must not be presented as
-  all-time certainty. pump.fun's `ath_market_cap` *is* a true all-time high and
-  may be labelled as such once it is wired in (see the migration handoff).
-- **A peak is only credible if the pool backing it was real.** pump.fun's feed
-  includes wash-pumped tokens printing nine-figure "peaks" on ~$1,300 of
-  liquidity; Dune's trade filter was incidentally excluding them. Gate any peak
-  on an ATH-to-liquidity sanity check measured at capture time. Never
-  manufacture a peak from a single tiny trade.
+  all-time certainty. pump.fun's `ath_market_cap` *is* a true all-time high, so
+  the drawer labels the rows it sourced `ATH market cap`; the table column stays
+  `Observed peak` because it mixes both kinds of row.
+- **pump.fun's feed contains wash-printed peaks, and we do not yet filter
+  them.** Nine-figure "peaks" on ~$1,300 of liquidity; Dune's trade filter was
+  incidentally excluding them. **No working filter has been found** — an
+  ATH-to-liquidity gate was built, measured, and withdrawn on 2026-07-29 because
+  every candidate signal (liquidity, pool share of supply, market cap, retrace)
+  moves with the pump's phase, so the same token gets opposite verdicts
+  depending on when it is sampled. Peaks are recorded unfiltered for now. Read
+  the fake-ATH record in [docs/HISTORY.md](docs/HISTORY.md)'s 2026-07-28/29
+  entry before attempting another filter; it documents four failed approaches
+  and why.
 - Volume, liquidity, buy/sell activity, retention, time-to-peak, and longevity
   are supporting evidence. They help the user judge the strength of an idea or
   niche, but they do not disqualify a brief `$100k+` runner.
@@ -75,18 +90,18 @@ meta.tracker is a dashboard for recently graduated Solana tokens. Its job is to
 show a solo creator what launched, what it looked like, and whether it worked —
 so they can decide what to build next.
 
-Data flow **as deployed today**: `Dune query 4124453 → Netlify scheduled-sync
-(every 2h, UTC) → DexScreener enrichment → Convex snapshots + audit → React
-(/api/*)`.
+Data flow: `pump.fun /coins?complete=true → Netlify scheduled-sync (every 2h,
+UTC) → DexScreener enrichment → Convex snapshots + audit → React (/api/*)`.
+pump.fun supplies discovery, art, links, live market cap and a reported ATH;
+DexScreener adds volume, liquidity and 24h change only; `/api/graduated` is a
+pure Convex reader that calls no source at all.
 
-**This is mid-migration.** Query 4124453 is not ours, and it misses ~95% of
-graduations (52 rows against 995 in the same 24h window) because it matches one
-hardcoded bonding-curve instruction that PumpSwap migrations bypass. Its market
-cap is derived from at most 7 trades. A verified pump.fun replacement is
-committed but **not wired in**; discovery, art, links, market cap and ATH all
-move to pump.fun, leaving DexScreener for volume/liquidity/24h change only. Read
-[docs/HANDOFF-2026-07-28-pumpfun-migration.md](docs/HANDOFF-2026-07-28-pumpfun-migration.md)
-before changing the sync path.
+**Wired and verified locally on 2026-07-30, not yet deployed.** Production runs
+the previous Dune pipeline until the next deploy, and the Dune code path stays
+in the tree as the rollback reference until a production run is verified — see
+[PLAN.md](PLAN.md). The query it replaces (`4124453`, third-party) missed ~95%
+of graduations: 52 rows against 995 in the same 24h window, because it matches
+one hardcoded bonding-curve instruction that PumpSwap migrations bypass.
 
 ## Stack
 
@@ -107,15 +122,16 @@ src/
                           peak.ts ($100k qualification), token-links.ts,
                           schedule.ts (cron countdown maths), format.ts
 netlify/functions/
-  graduated.ts            Main data API (live / historical / check-freshness)
+  graduated.ts            Snapshot reader (latest / historical); calls no source
   scheduled-sync.ts       Every-2h cron writer (background function)
   peak-backfill.ts        Hourly observed-peak reader (background function)
-  health.ts               Convex-backed health endpoint (no Dune call)
+  health.ts               Convex-backed health endpoint (sync + feed recency)
   backfill.ts             Admin-only historical repair (POST)
   available-dates.ts      Snapshot date list for the date picker
-  _shared/                token-sync (Dune + pump.fun + DexScreener engine),
-                          solana-tracker (observed peak; redundant once pump.fun
-                          ATH is wired), retry, sync-health, api-contract
+  _shared/                token-sync (pump.fun + DexScreener engine; the Dune
+                          reader survives only for backfill.ts), solana-tracker
+                          (observed peak; superseded by pump.fun's ATH), retry,
+                          sync-health, api-contract
 convex/
   schema.ts               Tables: duneMetadata, dailySnapshots, syncRuns,
                           graduatedTokens, observedPeaks
@@ -147,9 +163,10 @@ npx tsc --noEmit -p convex/tsconfig.json   # typecheck Convex
   `npx convex deploy` pushes to the wrong one (`qualified-hound-245`); update the
   live store with `npx convex dev --once` (verify via `npx convex dashboard
   --no-open`).
-- **Only scheduled-sync and admin backfill write durable snapshots.** Live /
-  manual fetches may return fresh data but must not advance `duneMetadata`
-  unless a matching snapshot is stored.
+- **Only scheduled-sync and admin backfill write durable snapshots.**
+  `/api/graduated` is a pure reader and must not regain a live-fetch path: a
+  full cohort needs minutes of paced enrichment, which a request handler does
+  not have. Recency belongs to `syncRuns` + `/api/health`.
 - **After any Netlify deploy that touches functions, verify** deploy metadata
   registers *both* schedules: `scheduled-sync` at `0 */2 * * *` and
   `peak-backfill` at `20 * * * *`. TypeScript passing does not prove a cron
@@ -157,21 +174,24 @@ npx tsc --noEmit -p convex/tsconfig.json   # typecheck Convex
 - **Date tabs = rolling snapshot windows**, not DexScreener `pairCreatedAt`
   buckets. Don't group history by `pairCreatedAt`.
 - **Health source is `syncRuns` + `/api/health`**, not snapshot presence.
-  Health is recency-based: OK when a sync succeeded within ~4.5h (two 2h
-  intervals + grace), so it never false-alarms on historical slots after a
-  cadence change. Today's data is still one snapshot row, overwritten each run.
+  Health is recency-based on two tiers: a sync succeeded within ~4.5h (two 2h
+  intervals + grace), *and* the newest token the feed offered is under ~6.5h
+  old. The second tier is what catches a source that answers happily with a
+  frozen page. Today's data is still one snapshot row, overwritten each run.
 - **DexScreener throttles above ~5 req/sec.** A bulk run at ~14/sec returns
   empty `volume`/`liquidity` with no error, which reads as "this token has no
-  market" and will lead you to the wrong conclusion. Pace bulk enrichment.
+  market" and will lead you to the wrong conclusion. `enrichTokens` paces at 5
+  in flight per second and a covering test asserts it; do not raise it.
 - **pump.fun's API is undocumented and moves.** No key or quota, but v1 and v2
   are already retired, and the community spec
   ([BankkRoll/pumpfun-apis](https://github.com/BankkRoll/pumpfun-apis)) is a
-  2026-06-17 snapshot of which ~95% now 404s. Only `/coins`, `/coins/{mint}`
-  and `/coins/currently-live` are confirmed working. Probe before believing any
-  endpoint, and always keep the DexScreener fallback so failure degrades
-  instead of breaking.
-- **`force=true` and `POST /api/backfill` are admin-only** (`ADMIN_REFRESH_TOKEN`);
-  start backfills with `dryRun=true`.
+  2026-06-17 snapshot of which ~95% now 404s. Confirmed working: `/coins`,
+  `/coins/{mint}` and `/coins/currently-live` on `frontend-api-v3`, and
+  `/coins/graduated` on the second host `advanced-api-v2` (only ~1.9h deep —
+  see HISTORY's 2026-07-28/29 entry). Probe before believing any endpoint, and
+  always keep the DexScreener fallback so failure degrades instead of breaking.
+- **`POST /api/backfill` is admin-only** (`ADMIN_REFRESH_TOKEN`); start
+  backfills with `dryRun=true`. It is the last Dune consumer left.
 
 ## Verify before declaring done
 

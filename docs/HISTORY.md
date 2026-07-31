@@ -6,6 +6,189 @@ operations docs see [README.md](../README.md).
 
 ---
 
+## 2026-07-30 — pump.fun pipeline wired and verified locally (not deployed)
+
+The migration prepared on 2026-07-28/29 was implemented. Production still runs
+the Dune pipeline; what remains is in [PLAN.md](../PLAN.md).
+
+### What changed
+
+- `scheduled-sync` discovers through pump.fun instead of Dune, passes the feed's
+  metadata into enrichment, and records each reported ATH into `observedPeaks`
+  in batches of 10. It no longer needs `DUNE_API_KEY`, and no longer writes
+  `duneMetadata` — nothing reads that table any more.
+- **DexScreener pacing fixed first**, as the plan required: `enrichTokens` went
+  from 15 concurrent + 500ms (17–30 req/sec against a ~5/sec ceiling) to 5 in
+  flight per second. A covering test asserts both the concurrency and the
+  spacing, because the failure mode is silent — a throttled read is HTTP 200
+  with empty `volume`/`liquidity` that no retry or success counter notices.
+- `/api/graduated` became a pure Convex reader. The live-fetch, `force=true`
+  refresh, `check-freshness` mode and Dune execution comparison are gone; it
+  serves the most recent stored snapshot, which is not necessarily today's, so
+  the UTC-midnight-to-first-sync gap now shows yesterday's cohort instead of an
+  empty table. Recency belongs to `syncRuns` + `/api/health`.
+- **Health's second staleness tier was kept, not deleted.** pump.fun has no
+  execution timestamp, but the newest `created_timestamp` in the feed is a real
+  freshness signal: graduations arrive tens per hour, so that reading falling
+  hours behind means the source stopped moving. `DUNE_STALE_AFTER_MS` /
+  `getDuneAgeMs` became `FEED_STALE_AFTER_MS` / `getFeedAgeMs`, and
+  `/api/health` now reports `feedAgeMinutes` / `feedStaleAfterMinutes` with the
+  GitHub workflow updated in lockstep. The Convex column keeps its `dune*` name
+  until the schema prune. This tier is what would catch a feed answering happily
+  with a frozen page — the same class of silent staleness that let the broken
+  Dune query run unnoticed for months.
+- `src/lib/peak.ts` lost its `scheduled` ("after 24h") state: the ATH now
+  arrives with discovery, so a missing peak is genuinely missing. The drawer
+  labels pump.fun-sourced rows `ATH market cap` / `ATH reached`, hides the Dune
+  source-timing block for rows that never had one, and drops the dead
+  `Dune market cap` / `Dune VWAP price` / `Dune trade count` rows unless the row
+  actually carries them. The header countdown says `Sync in`, not `Dune in`.
+
+### Verification
+
+Run against the live API with no deploy and no Convex writes, per PLAN's
+verification loop — one hour of the real feed through the real code:
+
+```
+pump.fun: 34 graduated tokens over 1 pages (0.3s)
+enrichment: 6.8s for 34 tokens (5.0 tokens/sec)
+DexScreener listed:  34/34 (100.0%)
+  non-empty liquidity: 34/34
+  non-empty volume:    34/34
+pump.fun art:        34/34
+reported ATH:        34/34
+cleared $100k:       17/34
+```
+
+That clears PLAN step 1's bar (≥95% non-empty liquidity for listed tokens) with
+room to spare. The UI was then driven against that cohort: art, plain-text
+links, peaks, the `Cleared $100K` filter and the drawer's source-timing block
+all render, console clean. 51/51 tests, both typechecks and the build pass.
+
+Extrapolating, 34 tokens/hour ≈ 816/day, consistent with the ~995/day measured
+on 2026-07-28 and ~20x what the Dune query was returning.
+
+### Notes for the next session
+
+- **The pre-flight probe from a Netlify IP was skipped by the owner's
+  decision.** Everything measured so far came from a residential IP against a
+  Cloudflare-fronted API. An empty feed on the first scheduled run is the
+  signature of datacenter egress being blocked; the sync refuses to store an
+  empty cohort, so the previous snapshot survives and the failure is loud.
+- The wash-printed ATHs are plainly visible in the verified cohort and remain
+  unfiltered by design — one row showed a $52.11M peak against a $1.3K market
+  cap. The launch-farm pattern is visible too: five different mints in one hour
+  all named TNOS.
+
+---
+
+## 2026-07-28/29 — pump.fun migration prepared; fake-ATH filtering attempted and parked
+
+Two sessions of work, merged to `main`, **not deployed**. The implementation
+plan lives in [PLAN.md](../PLAN.md); this entry is the evidence record.
+
+### The core finding
+
+Dune query `4124453` (third-party, hardcoded) detects graduation by matching a
+single legacy bonding-curve instruction. pump.fun now migrates via PumpSwap,
+which that instruction never fires for, so the query silently misses ~95% of
+graduations: **52 rows vs 995–1,022** in the same 24h window, measured three
+times across two days. Its market cap derives from at most 7 trades. pump.fun's
+own API returns the full cohort with 100% art coverage, live `usd_market_cap`
+(within ~1% of DexScreener), and `ath_market_cap` (matched Solana Tracker to
+0.3% on TRUMPFOLIO).
+
+### pump.fun API verification (as of 2026-07-29)
+
+Two hosts, no key, no auth. The community spec (BankkRoll/pumpfun-apis) is a
+2026-06-17 snapshot of which ~95% now 404s — probe before believing anything.
+
+- `frontend-api-v3.pump.fun` — working: `/coins?complete=true&sort=created_timestamp&order=DESC&limit=50&offset=N&includeNsfw=true`
+  (the graduated feed; full coin objects, ~20 pages per 24h), `/coins/{mint}`,
+  `/coins/currently-live`. Planning number ~20 RPM; a 65-req burst drew no 429.
+  Key fields: `ath_market_cap` + `ath_market_cap_timestamp`, `usd_market_cap`
+  (live; ignore SOL-denominated `market_cap`), `image_uri` (100%), `website` /
+  `twitter` / `telegram` (creators often leave a bare `https://` — strip it),
+  `created_timestamp`, `reply_count`, `creator`.
+- `advanced-api-v2.pump.fun` — a second host this project had never probed.
+  `/coins/graduated` is **live here** (404 on v3) and returns per token:
+  `graduationDate` (true graduation time), `numHolders`, `transactions`,
+  buy/sell splits, `topHoldersPercentage`, `sniperOwnedPercentage`, a top-10
+  holders array, `allTimeHighMarketCap`. Cursor is `lastScore` from the
+  `pagination` envelope (`offset` is silently ignored); **depth is hard-capped
+  at ~1.9h / ~90 tokens**, so it cannot serve discovery — v3 remains the
+  discovery source. `/coins/top-holders/{mint}` also live. The `/v1/*/batch`
+  endpoints in the spec are 404.
+- Dead on both hosts: `/metas/current`, `/candlesticks/{mint}`, `/trades/*`,
+  `/coins/search`, `/coins/king-of-the-hill`, and most of the rest of the spec.
+
+DexScreener remains the only source for 24h volume, liquidity, and 24h change —
+all 49 pump.fun coin fields were scanned for market metrics; there are none.
+
+### Fake ATHs: four filtering approaches, all failed — read before a fifth
+
+pump.fun reports `ath_market_cap` faithfully **including wash pumps**: on a
+constant-product AMM, pumping price by factor f requires adding √f times the
+SOL, which sits in the pool during the pump (reported as real liquidity!) and
+leaves when the operator sells back out. A worked example ($USWR,
+`J2H2gk…AYMdpump`): $172M "ATH" against a pool that ended at $1,374 of
+liquidity holding 99.93% of supply. Without a filter, 52 of the 60 highest
+ATHs in a live cohort were fabricated. Dune's `amount_usd >= 1` trade filter
+had been excluding these by accident.
+
+The four failures:
+
+1. **ATH / liquidity ratio** (built, shipped to the tree, withdrawn same day).
+   A stratified 84-token sample showed the distribution is continuous, not two
+   clusters (real tokens reach ratio 307; wash starts ~700), and the signal is
+   phase-dependent: the same token measured $517,911 liquidity / $51.67M mcap
+   mid-pump and $1,300 / $1,279 hours later — opposite verdicts, and freezing
+   the verdict at capture would have permanently blessed fakes caught mid-pump.
+2. **Solana Tracker `risk` object** — no separation (`rugged` was false even
+   on the $172M-on-$1,400 tokens; `top10`/`score` overlap completely).
+3. **Transactions per distinct wallet** (Solana Tracker `/stats`) — total
+   overlap (fakes 1.4–125, real 1.2–54).
+4. **Transactions per holder** (advanced-api-v2) — looked clean on 5 labelled
+   wash tokens (real ≤12.9, wash ≥16.0), collapsed on 13 (every age bucket
+   overlapped). The clean split was an n=5 artifact.
+
+**The labelling trap that made three of these look like successes:** labelling
+by price retrace or pool composition measures *whether a token had collapsed
+yet at labelling time*, not whether its peak was real. The same token was
+labelled REAL (pool 0.5% of supply, $526k liquidity) and then WASH (99.9%,
+$1,324) by the same rule 90 minutes apart. Any threshold validated against
+such labels is worthless.
+
+**The conceptual error underneath:** a fabricated peak (~20 holders, nobody
+real ever bought) and a real peak that died (TNOS: 3,454 holders, then dumped
+to zero) both end with supply back in the pool. A filter tuned to "did it
+collapse?" deletes brief runners — the product's core cohort. The right
+question is "did real people pay these prices?".
+
+**Only phase-independent signal found: holder count** — it accumulates and
+never retraces. Fabricated peaks sat at 12–52 holders; real participation ran
+hundreds to thousands. Untested as a filter; the owner parked the problem and
+peaks are recorded unfiltered.
+
+### Also in this pass
+
+- `fetchGraduatedFromPumpFun` / `pumpMetaFromCoin` written and unit-tested
+  (`tests/pump-fun.test.mjs`, the pump.fun path's first coverage) — wired to
+  nothing yet.
+- Frontend rebuilt on the light paper palette: `ControlBar` (date tabs +
+  Cleared-$100K filter), `NextRuns` countdowns, plain-text row links, Age
+  column, sticky header, 56px art. Drawer links later aligned to the same
+  plain-text style; `framer-motion` and `lucide-react` removed.
+- Docs restructured: mission rewritten in AGENTS/CLAUDE, PLAN.md made the
+  implementation plan, redundancy clusters collapsed, this handoff folded in
+  here and deleted.
+- Known trap documented for the wiring session: `enrichTokens` paces
+  DexScreener at 17–30 req/sec against a ~5/sec ceiling, and throttled
+  responses are HTTP 200 with empty fields — silently corrupt. Fix before the
+  first 1,000-token sync (PLAN step 1).
+
+---
+
 ## 2026-07-21 - Reliability and compatibility work prepared (not deployed)
 
 This working tree was audited and prepared for a staged production rollout. No

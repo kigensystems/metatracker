@@ -34,10 +34,14 @@ export function formatAge(timestamp: number | null | undefined): string {
   return `${days}d`;
 }
 
-// Absolute creation time, e.g. "Jun 22, 2:30 PM" — the companion to formatAge.
-export function formatDateTime(timestamp: number | null | undefined): string {
-  if (!timestamp) return '—';
-  return new Date(timestamp).toLocaleString('en-US', {
+// Absolute creation time, e.g. "Jun 22, 2:30 PM EST" — the companion to
+// formatAge. Accepts ISO strings as well: Convex stores some source
+// timestamps that way.
+export function formatDateTime(value: string | number | null | undefined): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
@@ -45,6 +49,31 @@ export function formatDateTime(timestamp: number | null | undefined): string {
     hour12: true,
     timeZoneName: 'short',
   });
+}
+
+// "5m ago" — formatAge with a suffix, for freshness copy rather than a column.
+export function formatRelativeTime(value: string | number | null | undefined): string {
+  if (!value) return 'Unknown';
+  const date = new Date(value);
+  const diffMs = Date.now() - date.getTime();
+  if (!Number.isFinite(diffMs)) return 'Unknown';
+
+  const mins = Math.max(0, Math.floor(diffMs / 60000));
+  const hours = Math.floor(mins / 60);
+  const days = Math.floor(hours / 24);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
+}
+
+// A YYYY-MM-DD snapshot key as "Jun 22". Snapshot dates are UTC days, so the
+// label must be too, or the tab flips a day early for anyone west of UTC.
+export function formatSnapshotDate(value: string | null | undefined): string {
+  if (!value) return '';
+  const date = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
 export function formatCompact(value: number | null | undefined): string {

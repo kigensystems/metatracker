@@ -1,46 +1,10 @@
 import { Box, Tooltip, Typography } from '@mui/material';
+import { formatDateTime, formatRelativeTime, formatSnapshotDate } from '../lib/format';
 import { FIGURE } from '../lib/theme';
 import type { DataFreshness } from '../lib/types';
 
 interface FreshnessBarProps {
   freshness: DataFreshness | null;
-}
-
-function formatDateTime(value: string | number | null | undefined): string {
-  if (!value) return 'Unknown';
-  const date = typeof value === 'number' ? new Date(value) : new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Unknown';
-
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
-}
-
-function formatRelativeTime(value: string | number | null | undefined): string {
-  if (!value) return 'Unknown';
-  const date = typeof value === 'number' ? new Date(value) : new Date(value);
-  const diffMs = Date.now() - date.getTime();
-  if (!Number.isFinite(diffMs)) return 'Unknown';
-
-  const diffMins = Math.max(0, Math.floor(diffMs / 60000));
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  return `${diffDays}d ago`;
-}
-
-function formatSnapshotDate(value: string | null): string {
-  if (!value) return '';
-  const date = new Date(`${value}T00:00:00Z`);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
 export function FreshnessBar({ freshness }: FreshnessBarProps) {
@@ -54,11 +18,6 @@ export function FreshnessBar({ freshness }: FreshnessBarProps) {
     : isHistorical
       ? 'Saved snapshot'
       : 'Up to date';
-  const executionDelta = freshness.latestDuneExecutionEndedAt
-    && freshness.duneExecutionEndedAt
-    && freshness.latestDuneExecutionEndedAt !== freshness.duneExecutionEndedAt
-    ? 'Newer Dune result available'
-    : null;
 
   return (
     <Box
@@ -99,13 +58,12 @@ export function FreshnessBar({ freshness }: FreshnessBarProps) {
             display: 'block',
           }}
         >
-          Dune data {formatRelativeTime(freshness.duneExecutionEndedAt)}
-          {freshness.totalCount !== null ? ` · ${freshness.totalCount} tokens` : ''}
+          {freshness.totalCount !== null ? `${freshness.totalCount} tokens` : ''}
           {freshness.enrichment && freshness.enrichment.failedCount > 0
             ? ` · ${freshness.enrichment.failedCount} missing Dex profiles`
             : ''}
         </Typography>
-        {(freshness.staleReason || executionDelta) && (
+        {freshness.staleReason && (
           <Typography
             variant="caption"
             sx={{
@@ -118,7 +76,7 @@ export function FreshnessBar({ freshness }: FreshnessBarProps) {
               maxWidth: { md: 520 },
             }}
           >
-            {freshness.staleReason || 'A newer source result is available.'}
+            {freshness.staleReason}
           </Typography>
         )}
       </Box>

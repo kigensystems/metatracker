@@ -64,8 +64,6 @@ export interface DataFreshness {
   snapshotDate: string | null;
   fetchedAt: string | null;
   capturedAt: number | null;
-  duneExecutionEndedAt: string | null;
-  latestDuneExecutionEndedAt: string | null;
   isStale: boolean;
   staleReason: string | null;
   dateMode: string | null;

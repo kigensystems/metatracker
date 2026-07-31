@@ -82,6 +82,10 @@ export interface DuneLatestStatus {
  * A peak reading ready for `observedPeaks.record`. pump.fun reports an
  * all-time high directly, so unlike the Solana Tracker path there is no candle
  * window to qualify — the window is the token's whole life.
+ *
+ * Recorded unfiltered. pump.fun's feed does contain wash-printed ATHs, but no
+ * reliable way to identify them at capture time has been found — see the
+ * fake-ATH section of docs/HISTORY.md's 2026-07-28/29 entry before adding one.
  */
 export interface PeakObservation {
   mint: string;
@@ -243,18 +247,18 @@ export function isDuneExecutionPendingError(error: unknown): error is DuneExecut
   return error instanceof DuneExecutionPendingError;
 }
 
+function isRetryableHttpStatus(statusCode: number): boolean {
+  return statusCode === 408 || statusCode === 409 || statusCode === 425 || statusCode === 429 || statusCode >= 500;
+}
+
 export function isRetryableSyncError(error: unknown): boolean {
   const statusCode = getDuneStatusCode(error);
-  if (statusCode === undefined) {
-    return true;
-  }
-
-  return statusCode === 408 || statusCode === 409 || statusCode === 425 || statusCode === 429 || statusCode >= 500;
+  return statusCode === undefined || isRetryableHttpStatus(statusCode);
 }
 
 function isRetryableDexError(error: unknown): boolean {
   if (error instanceof DexScreenerError && error.statusCode) {
-    return error.statusCode === 408 || error.statusCode === 409 || error.statusCode === 425 || error.statusCode === 429 || error.statusCode >= 500;
+    return isRetryableHttpStatus(error.statusCode);
   }
 
   return true;
@@ -490,7 +494,7 @@ export async function fetchDuneExecutionStatus(
   return JSON.parse(responseText) as DuneExecutionStatus;
 }
 
-function isTerminalFailureState(state: string): boolean {
+export function isTerminalFailureState(state: string): boolean {
   return state === "QUERY_STATE_FAILED"
     || state === "QUERY_STATE_CANCELED"
     || state === "QUERY_STATE_CANCELLED"
@@ -586,7 +590,7 @@ async function fetchDexScreenerOnce(mint: string): Promise<DexScreenerFetchResul
  * for these tokens and holds the creator's own submission, which covered 37/37
  * and 28/37 of the same cohort.
  */
-interface PumpFunMeta {
+export interface PumpFunMeta {
   image?: string;
   website?: string;
   twitter?: string;
@@ -608,12 +612,23 @@ interface PumpFunMeta {
  */
 const PUMP_REQUEST_SPACING_MS = 1_000;
 
+/**
+ * Identifies the discovery source in `syncRuns` and `dailySnapshots`. It sits in
+ * the columns Dune's query id used to occupy, so an audit row says which
+ * pipeline produced it.
+ */
+export const PUMP_SOURCE_ID = "pumpfun:coins?complete=true";
+/** Distinguishes an ATH reported by the venue from a candle-derived peak. */
+export const PUMP_PEAK_SOURCE = "pump.fun";
+/** How far back each sync reads the graduated feed. */
+export const PUMP_DISCOVERY_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 /** One page of the graduated feed. The list carries full coin objects. */
 const PUMP_PAGE_SIZE = 50;
 /** Stop paging rather than walk the entire history if the cutoff never hits. */
 const PUMP_MAX_PAGES = 40;
 
-function pumpMetaFromCoin(coin: Record<string, unknown>): PumpFunMeta {
+export function pumpMetaFromCoin(coin: Record<string, unknown>): PumpFunMeta {
   const text = (value: unknown): string | undefined => {
     if (typeof value !== 'string') return undefined;
     const trimmed = value.trim();
@@ -641,6 +656,15 @@ export interface PumpGraduatedResult {
   meta: Map<string, PumpFunMeta>;
   createdAt: Map<string, number>;
   pagesFetched: number;
+  /**
+   * Whether the walk actually reached the far edge of the window.
+   *
+   * False when a page request failed or the page cap ran out, which truncates
+   * the cohort by an unknown amount. The paging itself still degrades rather
+   * than throwing — the caller decides, and `scheduled-sync` refuses to store a
+   * partial day rather than record it as a success.
+   */
+  complete: boolean;
 }
 
 /**
@@ -648,11 +672,11 @@ export interface PumpGraduatedResult {
  *
  * The Dune query this replaces detects graduation by matching one hardcoded
  * bonding-curve instruction, and now misses most of them — measured against
- * this feed it returned 52 for a 24h window that pump.fun reports ~700 for.
+ * this feed it returned 52 for a 24h window that pump.fun reports ~995 for.
  *
- * Note the list's own `usd_market_cap` is deliberately ignored: it is the
- * bonding-curve valuation, which freezes the moment a token graduates. Live
- * market cap still comes from DexScreener and the peak from Solana Tracker.
+ * The list carries live market cap and an all-time high alongside the art and
+ * links, so `enrichTokens` needs DexScreener only for volume, liquidity and 24h
+ * change. The ATH is passed through unfiltered; see `PeakObservation`.
  */
 export async function fetchGraduatedFromPumpFun(
   windowMs: number = 24 * 60 * 60 * 1000,
@@ -664,6 +688,7 @@ export async function fetchGraduatedFromPumpFun(
   const createdAt = new Map<string, number>();
   const seen = new Set<string>();
   let pagesFetched = 0;
+  let complete = false;
 
   for (let page = 0; page < PUMP_MAX_PAGES; page += 1) {
     const url = `https://frontend-api-v3.pump.fun/coins`
@@ -680,7 +705,11 @@ export async function fetchGraduatedFromPumpFun(
     const coins = Array.isArray(body)
       ? body as Record<string, unknown>[]
       : ((body as { coins?: Record<string, unknown>[] })?.coins ?? []);
-    if (coins.length === 0) break;
+    // An empty page is the feed genuinely ending, not a truncation.
+    if (coins.length === 0) {
+      complete = true;
+      break;
+    }
 
     pagesFetched += 1;
     let reachedCutoff = false;
@@ -709,11 +738,14 @@ export async function fetchGraduatedFromPumpFun(
       createdAt.set(mint, created);
     }
 
-    if (reachedCutoff) break;
+    if (reachedCutoff) {
+      complete = true;
+      break;
+    }
     await sleep(PUMP_REQUEST_SPACING_MS);
   }
 
-  return { tokens, meta, createdAt, pagesFetched };
+  return { tokens, meta, createdAt, pagesFetched, complete };
 }
 
 async function fetchDexScreener(mint: string): Promise<DexScreenerFetchResult | null> {
@@ -744,11 +776,21 @@ export interface EnrichOptions {
   createdAt?: Map<string, number>;
 }
 
+/**
+ * DexScreener throttles above ~5 req/sec, and a throttled read is HTTP 200 with
+ * empty `volume`/`liquidity` rather than an error — it never retries, never
+ * counts as a failure, and reads downstream as "this token has no market".
+ * Five in flight, then a full second, holds the run under that ceiling. A
+ * ~1,000-token cohort takes ~200s, well inside the 15-minute background limit.
+ */
+const DEX_BATCH_SIZE = 5;
+const DEX_BATCH_SPACING_MS = 1_000;
+
 export async function enrichTokens(
   tokens: DuneGraduatedToken[],
   options: EnrichOptions = {},
 ): Promise<EnrichmentResult> {
-  const batchSize = 15;
+  const batchSize = DEX_BATCH_SIZE;
   const results: StoredToken[] = [];
   const failedEnrichments: string[] = [];
   const peakObservations: PeakObservation[] = [];
@@ -837,7 +879,7 @@ export async function enrichTokens(
     });
 
     if (i + batchSize < tokens.length) {
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await sleep(DEX_BATCH_SPACING_MS);
     }
   }
 

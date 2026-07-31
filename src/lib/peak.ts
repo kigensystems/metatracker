@@ -6,25 +6,23 @@ import type { GraduatedToken } from './types';
 export const PEAK_THRESHOLD = 100_000;
 
 /**
- * The peak reader only queues tokens once they are a day old, so a young token
- * with no reading is waiting its turn rather than lacking one.
- *
- * This mirrors `MIN_TOKEN_AGE_MS` in netlify/functions/peak-backfill.ts. The
- * server knows the real reason a reading is missing (too young, retrying, or
- * given up on), but only the peak value itself crosses the API, so the client
- * infers the common case from age. Deliberate: surfacing the full status is
- * more plumbing than this one label is worth. Keep the two constants in step.
+ * `observedPeakCandleInterval` for a peak the venue reported itself, as opposed
+ * to one derived from a bounded candle window. Only the reported kind is a true
+ * all-time high, so only it may be labelled ATH.
  */
-const PEAK_ELIGIBLE_AFTER_MS = 24 * 60 * 60 * 1000;
+export const REPORTED_PEAK_INTERVAL = 'reported';
 
 export type PeakState =
   /** Read, and it cleared the bar. */
   | { kind: 'cleared'; value: number }
   /** Read, but it never got there. */
   | { kind: 'below'; value: number }
-  /** Too young to have been read yet — absence here is schedule, not evidence. */
-  | { kind: 'scheduled' }
-  /** Old enough to have been read, and we still have no reading. */
+  /**
+   * No reading. pump.fun reports an all-time high with the token itself, so a
+   * missing peak is now genuinely missing rather than pending — only the venue
+   * omitting the figure, or a row captured before the peak was carried, gets
+   * here.
+   */
   | { kind: 'unread' };
 
 /**
@@ -45,7 +43,5 @@ export function peakState(token: GraduatedToken): PeakState {
     return value >= PEAK_THRESHOLD ? { kind: 'cleared', value } : { kind: 'below', value };
   }
 
-  const age = token.createdAt == null ? null : Date.now() - token.createdAt;
-  if (age != null && age < PEAK_ELIGIBLE_AFTER_MS) return { kind: 'scheduled' };
   return { kind: 'unread' };
 }

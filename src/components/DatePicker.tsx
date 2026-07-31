@@ -1,4 +1,5 @@
 import { Box, Button, Typography } from '@mui/material';
+import { formatSnapshotDate } from '../lib/format';
 import { accentAlpha, FIGURE, inkAlpha, LABEL } from '../lib/theme';
 
 interface AvailableDate {
@@ -15,15 +16,6 @@ interface DatePickerProps {
   isLoading?: boolean;
   liveDataDate?: string | null;
   liveTokenCount?: number;
-}
-
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr + 'T00:00:00Z');
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  });
 }
 
 function getLocalDateKey(date = new Date()): string {
@@ -76,7 +68,7 @@ export function DatePicker({
         <Button
           onClick={() => onDateChange(null)}
           disabled={isLoading}
-          title={`Latest observed token cohort (${formatDate(liveSnapshotDate)})`}
+          title={`Latest observed token cohort (${formatSnapshotDate(liveSnapshotDate)})`}
           aria-pressed={isLiveSelected}
           sx={{
             minWidth: 0,
@@ -159,10 +151,10 @@ export function DatePicker({
                     }),
               }}
               title={captureMode === 'daily-observed-union'
-                ? `All tokens observed in source snapshots on ${formatDate(date)}`
-                : `Final rolling source snapshot stored on ${formatDate(date)}`}
+                ? `All tokens observed in source snapshots on ${formatSnapshotDate(date)}`
+                : `Final rolling source snapshot stored on ${formatSnapshotDate(date)}`}
             >
-              {formatDate(date)}
+              {formatSnapshotDate(date)}
               <Typography
                 component="span"
                 sx={{

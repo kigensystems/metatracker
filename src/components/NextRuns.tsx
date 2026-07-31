@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Box, Tooltip, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { FIGURE, LABEL } from '../lib/theme';
-import { formatCountdown, nextDuneSync, nextPeakRead } from '../lib/schedule';
+import { formatCountdown, nextPeakRead, nextTokenSync } from '../lib/schedule';
 
 /** Ticks once a second so the countdowns actually count. */
 function useNow(): Date {
@@ -38,8 +38,8 @@ export function NextRuns({ sx }: { sx?: SxProps<Theme> }) {
   return (
     <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 2.5, ...sx }}>
       <Countdown
-        label="Dune in"
-        due={formatCountdown(nextDuneSync(now), now)}
+        label="Sync in"
+        due={formatCountdown(nextTokenSync(now), now)}
         hint="The token sync runs every 2 hours, on even UTC hours. This is the schedule, not a guarantee the run has finished."
       />
       <Countdown

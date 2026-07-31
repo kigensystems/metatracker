@@ -9,7 +9,7 @@ import { RowActions } from './RowActions';
 
 // Shared column template so the header and every row stay aligned.
 // Mobile: token · 24h volume · observed peak · links · detail affordance.
-// Desktop adds age, Dune market cap, and 24h change. The age column exists to
+// Desktop adds age, market cap, and 24h change. The age column exists to
 // carry information through the space the name column used to leave empty.
 // Mobile drops the chevron: the whole row is already the tap target, and those
 // pixels are worth more to the token name.

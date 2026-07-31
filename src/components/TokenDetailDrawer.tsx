@@ -1,9 +1,7 @@
 import { useMemo, useState } from 'react';
-import type { ReactNode } from 'react';
 import {
   Avatar,
   Box,
-  Button,
   Chip,
   Divider,
   Drawer,
@@ -15,14 +13,12 @@ import {
 import { useTheme } from '@mui/material/styles';
 import CloseIcon from '@mui/icons-material/Close';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import LanguageIcon from '@mui/icons-material/Language';
-import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import type { GraduatedToken } from '../lib/types';
 import { safeExternalUrl } from '../lib/external-url';
 import { changeColor, formatAge, formatCompact, formatDateTime, formatPercent, formatUsd } from '../lib/format';
 import { colors, FIGURE, LABEL } from '../lib/theme';
-import { hasClearedPeak } from '../lib/peak';
-import { XIcon } from './icons';
+import { hasClearedPeak, REPORTED_PEAK_INTERVAL } from '../lib/peak';
+import { tokenLinks } from '../lib/token-links';
 
 interface TokenDetailDrawerProps {
   token: GraduatedToken | null;
@@ -39,7 +35,6 @@ interface StatItem {
 interface ExternalLink {
   label: string;
   url: string;
-  icon: ReactNode;
 }
 
 function shortMint(mint: string): string {
@@ -55,50 +50,56 @@ export function TokenDetailDrawer({ token, open, onClose }: TokenDetailDrawerPro
   const stats = useMemo<StatItem[]>(() => {
     if (!token) return [];
 
-    const items: StatItem[] = [
+    // pump.fun tracks a true all-time high from the token's creation, so those
+    // rows can say so. Candle-derived readings stay "observed peak", which is
+    // all a bounded window supports.
+    const isReportedAth = token.observedPeakCandleInterval === REPORTED_PEAK_INTERVAL;
+    const when = (value: number | null | undefined, label: string): StatItem[] =>
+      value == null ? [] : [{ label, value: formatDateTime(value) }];
+    const usd = (value: number | null | undefined, label: string): StatItem[] =>
+      value == null ? [] : [{ label, value: formatUsd(value) }];
+
+    return [
       { label: 'Dex 24h volume', value: formatUsd(token.volume24h) },
       {
-        label: 'Observed peak MC',
+        label: isReportedAth ? 'ATH market cap' : 'Observed peak MC',
         value: formatUsd(token.observedPeakMarketCap),
         // Same reading as the list: green means it cleared the $100k bar.
         color: hasClearedPeak(token) ? 'primary.main' : undefined,
       },
-      { label: 'Dune market cap', value: formatUsd(token.duneMarketCap ?? token.marketCap) },
+      ...usd(token.dexMarketCap, 'Dex market cap'),
+      ...when(token.observedPeakAt, isReportedAth ? 'ATH reached' : 'Peak observed'),
+      { label: 'Market cap', value: formatUsd(token.marketCap) },
       { label: 'Dex 24h change', value: formatPercent(token.priceChange24h), color: changeColor(token.priceChange24h) },
       { label: 'Dex liquidity', value: formatUsd(token.liquidity) },
-      { label: 'Dune VWAP price', value: formatUsd(token.duneVwapPrice ?? token.priceUsd) },
-      { label: 'Dune trade count', value: formatCompact(token.tradeCount) },
-      { label: 'Pair created', value: formatDateTime(token.createdAt) },
+      ...usd(token.dexPriceUsd, 'Dex price'),
+      { label: 'Created', value: formatDateTime(token.createdAt) },
+      // Only rows captured by the retired Dune pipeline carry these at all.
+      ...usd(token.duneMarketCap, 'Dune market cap'),
+      ...usd(token.duneVwapPrice, 'Dune VWAP price'),
+      ...(token.tradeCount == null
+        ? []
+        : [{ label: 'Dune trade count', value: formatCompact(token.tradeCount) }]),
     ];
-
-    if (token.observedPeakAt != null) {
-      items.splice(2, 0, { label: 'Peak observed', value: formatDateTime(token.observedPeakAt) });
-    }
-
-    if (token.dexMarketCap != null) {
-      items.splice(2, 0, { label: 'Dex market cap', value: formatUsd(token.dexMarketCap) });
-    }
-    if (token.dexPriceUsd != null) {
-      items.splice(-2, 0, { label: 'Dex price', value: formatUsd(token.dexPriceUsd) });
-    }
-
-    return items;
   }, [token]);
 
   const externalLinks = useMemo(() => {
     if (!token) return [];
 
-    const links: Array<{ label: string; url: string | null; icon: ReactNode }> = [
-      { label: 'DexScreener', url: safeExternalUrl(token.dexScreenerUrl || token.links.dexscreener), icon: <OpenInNewIcon /> },
-      { label: 'Birdeye', url: safeExternalUrl(token.links.birdeye), icon: <OpenInNewIcon /> },
-      { label: 'Solscan', url: safeExternalUrl(token.links.solscan), icon: <OpenInNewIcon /> },
-      { label: 'Website', url: safeExternalUrl(token.website), icon: <LanguageIcon /> },
-      { label: 'X', url: safeExternalUrl(token.twitter), icon: <XIcon /> },
+    // The row's own set, so the drawer inherits its filter for "websites" that
+    // are really just the launch venue — plus the explorers the row has no room
+    // for.
+    const explorers: Array<{ label: string; url: string | null }> = [
+      { label: 'Birdeye', url: safeExternalUrl(token.links.birdeye) },
+      { label: 'Solscan', url: safeExternalUrl(token.links.solscan) },
     ];
 
-    return links.filter((link): link is ExternalLink => (
-      typeof link.url === 'string' && link.url.length > 0
-    ));
+    return [
+      ...tokenLinks(token),
+      ...explorers.filter((link): link is ExternalLink => (
+        typeof link.url === 'string' && link.url.length > 0
+      )),
+    ];
   }, [token]);
 
   const copyMint = async () => {
@@ -306,22 +307,25 @@ export function TokenDetailDrawer({ token, open, onClose }: TokenDetailDrawerPro
                 overflow: 'hidden',
               }}
             >
-              <Box sx={{ p: 1.5, borderBottom: 1, borderColor: 'divider' }}>
-                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                  Dune query · market cap, VWAP price, trades
-                </Typography>
-                <Typography variant="body2" sx={{ fontFamily: FIGURE.fontFamily, mt: 0.5 }}>
-                  {token.sourceExecutionEndedAt
-                    ? formatDateTime(Date.parse(token.sourceExecutionEndedAt))
-                    : 'Execution time unavailable'}
-                </Typography>
-              </Box>
+              {/* Only rows captured by the retired Dune pipeline carry an
+                  execution time; pump.fun-sourced rows have no such stage. */}
+              {token.sourceExecutionEndedAt && (
+                <Box sx={{ p: 1.5, borderBottom: 1, borderColor: 'divider' }}>
+                  <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                    Dune query · market cap, VWAP price, trades
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontFamily: FIGURE.fontFamily, mt: 0.5 }}>
+                    {formatDateTime(Date.parse(token.sourceExecutionEndedAt))}
+                  </Typography>
+                </Box>
+              )}
               {token.observedPeakSource && (
                 <Box sx={{ p: 1.5, borderBottom: 1, borderColor: 'divider' }}>
                   <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                    Solana Tracker · highest
-                    {token.observedPeakCandleInterval ? ` ${token.observedPeakCandleInterval}` : ''} candle
-                    {' '}in the window below
+                    {token.observedPeakCandleInterval === REPORTED_PEAK_INTERVAL
+                      ? 'pump.fun · all-time high reported by the venue, covering'
+                      : `Solana Tracker · highest ${token.observedPeakCandleInterval || ''} candle in`}
+                    {' '}the window below
                   </Typography>
                   <Typography variant="body2" sx={{ fontFamily: FIGURE.fontFamily, mt: 0.5 }}>
                     {token.observedPeakWindowFrom && token.observedPeakWindowTo
@@ -366,36 +370,28 @@ export function TokenDetailDrawer({ token, open, onClose }: TokenDetailDrawerPro
 
             <Divider sx={{ mb: 2 }} />
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 1 }}>
+            {/* Same treatment as RowActions: named text links, not boxed
+                icon buttons — the owner rejected the chip/button style. */}
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', columnGap: 2, rowGap: 1 }}>
               {externalLinks.map((link) => (
-                <Button
+                <Box
                   key={link.label}
+                  component="a"
                   href={link.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  variant="outlined"
-                  size="small"
-                  startIcon={link.icon}
                   sx={{
-                    justifyContent: 'flex-start',
-                    textTransform: 'none',
-                    borderColor: 'divider',
-                    color: 'text.secondary',
-                    minWidth: 0,
-                    '& .MuiButton-startIcon': { color: 'inherit' },
+                    fontSize: '0.8rem',
+                    fontWeight: 500,
+                    color: 'primary.main',
+                    textDecoration: 'none',
+                    whiteSpace: 'nowrap',
+                    '&:hover': { textDecoration: 'underline' },
+                    '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
                   }}
                 >
-                  <Box
-                    component="span"
-                    sx={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {link.label}
-                  </Box>
-                </Button>
+                  {link.label}
+                </Box>
               ))}
             </Box>
           </Box>

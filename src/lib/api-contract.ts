@@ -35,8 +35,6 @@ export function buildFreshness(data: Record<string, unknown>, totalCount: number
     snapshotDate: stringOrNull(data.snapshotDate),
     fetchedAt: stringOrNull(data.fetchedAt),
     capturedAt: numberOrNull(data.capturedAt),
-    duneExecutionEndedAt: stringOrNull(data.duneExecutionEndedAt),
-    latestDuneExecutionEndedAt: stringOrNull(data.latestDuneExecutionEndedAt),
     isStale,
     staleReason: stringOrNull(data.staleReason),
     dateMode: stringOrNull(data.dateMode),

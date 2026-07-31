@@ -5,11 +5,11 @@ const helperUrl = new URL('../node_modules/.cache/health-test/netlify/functions/
 const {
   SYNC_INTERVAL_MS,
   SYNC_STALE_AFTER_MS,
-  DUNE_STALE_AFTER_MS,
+  FEED_STALE_AFTER_MS,
   getScheduledSlot,
   getLatestSuccessfulRun,
   getSyncAgeMs,
-  getDuneAgeMs,
+  getFeedAgeMs,
   isHealthOk,
 } = await import(helperUrl);
 
@@ -72,7 +72,7 @@ test('is healthy when the last success is within the stale window', () => {
   const success = run('success', '2026-06-17T14:00:00.000Z');
   assert.equal(isHealthOk(success, now), true);
   assert.equal(getSyncAgeMs(success, now), 35 * 60 * 1000);
-  assert.equal(getDuneAgeMs(success, now), 35 * 60 * 1000);
+  assert.equal(getFeedAgeMs(success, now), 35 * 60 * 1000);
 });
 
 test('uses completion time for sync recency when it is available', () => {
@@ -87,17 +87,17 @@ test('uses completion time for sync recency when it is available', () => {
   );
 });
 
-test('flags a stale Dune execution even when the app sync just succeeded', () => {
+test('flags a stale source feed even when the app sync just succeeded', () => {
   const now = Date.parse('2026-06-17T14:00:00.000Z');
   const success = {
     ...run('success', '2026-06-17T14:00:00.000Z'),
-    duneExecutionEndedAt: new Date(now - DUNE_STALE_AFTER_MS - 60 * 1000).toISOString(),
+    duneExecutionEndedAt: new Date(now - FEED_STALE_AFTER_MS - 60 * 1000).toISOString(),
   };
 
   assert.equal(isHealthOk(success, now), false);
 });
 
-test('flags a successful run that has no trustworthy Dune execution time', () => {
+test('flags a successful run that has no trustworthy source freshness time', () => {
   const success = run('success', '2026-06-17T14:00:00.000Z');
   delete success.duneExecutionEndedAt;
 

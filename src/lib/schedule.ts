@@ -7,7 +7,7 @@
 //   peak-backfill   "20 * * * *"   → every UTC hour, at :20
 
 /** Next even UTC hour on the hour, strictly after `from`. */
-export function nextDuneSync(from: Date = new Date()): Date {
+export function nextTokenSync(from: Date = new Date()): Date {
   const next = new Date(from);
   next.setUTCMinutes(0, 0, 0);
   next.setUTCHours(next.getUTCHours() + 1);

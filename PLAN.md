@@ -1,259 +1,149 @@
 # meta.tracker — Plan
 
-Forward-looking plan and active risks. Past incidents and rollout notes are in
-[docs/HISTORY.md](docs/HISTORY.md). Architecture and operating instructions are
-in [README.md](README.md) and [AGENTS.md](AGENTS.md). The authoritative pipeline
-audit and next-session starting point are in
-[docs/HANDOFF-2026-07-28-pumpfun-migration.md](docs/HANDOFF-2026-07-28-pumpfun-migration.md).
+What is left of the switch from Dune to pump.fun. The pipeline is wired and
+locally verified; deploying it and retiring what it obsoletes are the remaining
+steps. Evidence, measurements, and API verification behind every claim here live
+in [docs/HISTORY.md](docs/HISTORY.md)'s 2026-07-28/29 and 2026-07-30 entries —
+read them before touching the sync path. Mission and guardrails live in
+[AGENTS.md](AGENTS.md).
 
 ## Purpose
 
-meta.tracker is a personal research dashboard for quickly answering:
+The product mission lives in [AGENTS.md](AGENTS.md) (mirrored in CLAUDE.md) and
+is authoritative there. Short version: one place to see which launches
+performed, with art and outbound links, so the owner can judge the meta without
+living on X. The qualifying cohort — graduated **and** a defensible ~`$100k+`
+peak, dead runners included — is defined in AGENTS.md's success-definition
+section.
 
-1. What tokens are people bidding right now?
-2. What appears to be the current meta?
-3. What launched recently and performed well, even if it already died?
-4. Which token is worth opening so I can investigate why it worked?
+## Current state
 
-This is not a general analytics product. It does not need onboarding, an opaque
-scoring system, automatic narrative classification, or perfect all-time market
-history. The interface should make the important tokens obvious and make it
-easy to open DexScreener, Pump.fun, socials, and the token website for research.
+**Implemented and verified locally on 2026-07-30; not deployed.** Production
+still runs the Dune pipeline until the next push to `main`.
 
-The target cohort is the intersection of tokens that graduated and tokens that
-reached a defensible peak market cap of roughly `$100k+`. The finished dashboard
-does not need to display every graduate. Until the data source can reliably
-recover observed peaks, the current broader feed is only a transitional proxy;
-it must not silently exclude a qualifying runner merely because the token died
-before a later snapshot.
+Wired: `scheduled-sync` discovers through pump.fun `/coins?complete=true`,
+enriches through DexScreener at 5 requests in flight per second, stores the
+snapshot with the capture time as its source timestamp, and records each
+reported ATH into `observedPeaks` in batches of 50. `/api/graduated` is a pure
+Convex reader — the live-fetch, force-refresh and Dune freshness-comparison
+paths are gone. Health's second staleness tier now measures feed freshness (the
+newest creation time the feed offered) instead of a Dune execution age.
 
-## What the current app actually receives
+Verified against the live API end to end, without deploying or writing to
+Convex: 34 graduates in a one-hour window, 100% DexScreener coverage with
+non-empty liquidity *and* volume for all of them, 100% art, 100% reported ATH,
+at 5.0 tokens/sec. The UI was driven against that cohort — art, links, peaks,
+the `Cleared $100K` filter, and the drawer's source-timing block all render.
 
-> **Superseded in part.** The Dune analysis below still describes what is
-> deployed, but the source itself is being replaced: query `4124453` misses ~95%
-> of graduations. Read
-> [docs/HANDOFF-2026-07-28-pumpfun-migration.md](docs/HANDOFF-2026-07-28-pumpfun-migration.md)
-> alongside this section.
+Still on Dune: `POST /api/backfill` only. `peak-backfill` + Solana Tracker still
+run and still own the peaks for every row captured before the migration.
 
-### Dune: which tokens enter the dashboard
+## What remains
 
-The live third-party query is
-[`4124453`](https://dune.com/queries/4124453), owned by `adam_tehc`. It:
+Open questions and deferred cleanups that are *not* deploy steps live in
+[docs/OPEN-ITEMS.md](docs/OPEN-ITEMS.md) — read it before assuming the
+pump.fun data is fully understood.
 
-- finds Pump.fun migrations from the preceding 24 hours;
-- finds qualifying DEX trades involving those tokens;
-- estimates market cap from the seven most recent trades;
-- filters out tokens with fewer than 100 counted trades; and
-- returns mint, symbol, estimated market cap, trade count, and price.
+### 1. Deploy, in dependency order
 
-Important limitations:
+1. `npx convex dev --once` (live store is `dusty-ox-307`; never
+   `npx convex deploy` — see AGENTS guardrails). **This order is load-bearing
+   now, not just prudent:** `/api/graduated` calls the new
+   `dailySnapshots.latest` query, so deploying Netlify first breaks every
+   dashboard load until Convex catches up.
+2. Push to `main` → Netlify.
+3. Verify deploy metadata registers **both** schedules: `scheduled-sync`
+   (`0 */2 * * *`) and `peak-backfill` (`20 * * * *`). TypeScript passing does
+   not prove a cron registered.
+4. Watch one scheduled run end-to-end: `/api/health` OK, snapshot row count
+   ~20x larger, art/links/peaks populated, drawer sane.
 
-- The app fetches the query's latest completed result; it does not cause the
-  query to execute. A new app sync can therefore receive an old token list.
-- The returned market cap is a current estimate at the Dune execution time, not
-  the token's peak.
-- The existing trade-count calculation likely describes token buys rather than
-  all buys and sells. It needs clearer SQL and naming before we rely on it as a
-  bidding signal.
-- Dune knows the Pump.fun migration time but the current result does not return
-  it.
+**The pre-flight probe was skipped by the owner's decision.** Every measurement
+so far ran from a residential IP, and pump.fun is Cloudflare-fronted; datacenter
+egress may be treated differently. If the first scheduled run returns an empty
+feed, that is the likely cause — the sync refuses to store an empty cohort, so
+the failure is loud and the previous snapshot survives. The migration would then
+need a different transport.
 
-The backfill query is [`7746626`](https://dune.com/queries/7746626). It accepts a
-historical window but otherwise uses similar logic.
+### 2. Retire what the migration obsoletes (only after step 1 is verified)
 
-### DexScreener: what the token looks like now
+Deleting these early would remove the rollback reference, so they wait.
 
-For every Dune mint, the app selects the Solana pair with the highest reported
-liquidity and receives:
+- `peak-backfill.ts` + `_shared/solana-tracker.ts` + `SOLANA_TRACKER_API_KEY`
+  + `tests/solana-tracker.test.mjs`. Keep the `observedPeaks` table — ATH
+  lands there. Spot-check one Raydium-migrated token's ATH first (only
+  PumpSwap ones were verified).
+- Dune-only code: the live-fetch/backfill machinery in `token-sync.ts`,
+  `backfill.ts`, `DUNE_API_KEY`/`DUNE_BACKFILL_QUERY_ID`.
+  **Accept the consequence:** pump.fun's feed reaches back ~24h, so
+  historical repair beyond that stops being possible once Dune goes. Convex
+  becomes the only history.
+- Prune write-only `dune*` fields from `syncRuns` / `dailySnapshots` and drop
+  the now-unwritten `duneMetadata` table (schema migration — propose first).
+  `syncRuns.duneExecutionEndedAt` carries feed freshness now and wants the
+  rename in the same pass.
 
-- token name, image, banner, website, and socials;
-- current pair volume, liquidity, price change, market cap, and price; and
-- pair creation time.
+## Verification loop (no deploy, no Convex writes)
 
-These metrics are useful for seeing what is active now. DexScreener does not
-provide the historical peak market cap through its documented API, and its
-24-hour volume is for the selected pair rather than necessarily every pool.
+Compile the sync engine standalone:
 
-### Storage
+```bash
+npx tsc --target ES2022 --module NodeNext --moduleResolution NodeNext \
+  --strict --skipLibCheck --outDir /tmp/out \
+  netlify/functions/_shared/token-sync.ts \
+  netlify/functions/_shared/retry.ts \
+  netlify/functions/_shared/api-contract.ts
+```
 
-The app currently overwrites one snapshot per UTC day on each two-hour sync.
-That is enough for the latest state but can erase evidence that a token ran and
-collapsed earlier in the day.
+Then a small script that runs `fetchGraduatedFromPumpFun` → `enrichTokens` →
+`withObservedPeaks` → `toApiToken`, writes the result as a
+`/api/graduated`-shaped JSON, and serves it on `:8899`. Point the UI at it:
 
-## The useful signals
+```bash
+VITE_API_BASE="http://localhost:8899" npx vite --port 5173
+```
 
-Avoid inventing one complicated “meta score.” Show understandable measurements
-and let the table be sorted quickly.
-
-### What people are bidding now
-
-- recent USD volume;
-- buy and sell counts or volume, once the Dune SQL is corrected;
-- current liquidity;
-- recent price change;
-- current market cap; and
-- time since graduation.
-
-### What performed well recently
-
-- best defensible market cap observed after graduation;
-- current market cap beside the peak;
-- percentage below peak, which makes dead runners visible;
-- total volume over the measured period; and
-- peak time or time-to-peak when available.
-
-The preferred peak is calculated from short trade buckets using a VWAP or
-median, not the largest price from one tiny trade. If Dune cannot produce a
-credible peak, show volume as the fallback and label it as volume. Do not invent
-an all-time high.
-
-For this tool, a peak within the recent monitored window is sufficient. Start
-with the same approximately 24-hour post-migration window used for discovery.
-Only add a longer monitoring window or another OHLCV provider if real examples
-show that the 24-hour result regularly misses useful runners.
-
-## Target interface
-
-Use one dense token table with simple sort presets instead of multiple complex
-dashboards:
-
-- **Trending** — sorts by recent USD volume and shows buy/sell activity,
-  liquidity, and recency beside it. No hidden composite score.
-- **Best runners** — sorts by observed peak, falling back to volume.
-- **Newest** — shows the latest graduates first.
-
-Suggested desktop columns:
-
-`Token | Peak MC | Current MC | Volume | Buys/Sells | Liquidity | Change | Age`
-
-The token name, image, and symbol should remain prominent because recognizing
-common names, characters, themes, and presentation is part of judging the meta.
-Dead runners must remain in Best runners even when their current values are
-poor.
-
-Clicking a token should provide the details needed to investigate it:
-
-- peak/current performance and when it happened;
-- image, banner, description, and socials when available;
-- mint address; and
-- direct links to DexScreener, Pump.fun, website, and social profiles.
-
-On mobile, keep token identity, the selected sort metric, volume, and age
-visible; move secondary measurements into the detail drawer.
-
-Freshness should be one quiet “updated” indicator. Technical source timestamps
-can remain available in the drawer or tooltip without dominating the page.
+Only a `Latest` tab appears against the fixture — date tabs come from stored
+Convex snapshots, which the fixture has none of. Three gotchas: node's `fetch`
+fails DNS under the tool sandbox (run such scripts with the sandbox disabled);
+the fixture server must re-read its JSON per request, or restart after
+regenerating, or you will screenshot stale data; and **check that port 8899 is
+actually yours** — a fixture server left running by an earlier session answers
+happily with a days-old cohort, and nothing about the response says so.
 
 ## Preservation contract
 
-The current production iteration must keep working throughout implementation.
-Treat the existing Convex documents, `/api/*` responses, historical snapshots,
-and React table as a compatibility contract.
+The current production iteration must keep working throughout. Existing Convex
+documents, `/api/*` response shapes, historical snapshots, and the React table
+are a compatibility contract:
 
-- Do not rename, remove, or change the meaning of existing token fields during
-  this work. Add new Convex fields as optional so old documents remain valid.
-- Keep the existing `tokens`, `totalCount`, freshness fields, and current token
-  properties in `/api/graduated`. New properties must be additive and nullable.
-- Keep `/api/graduated` live and historical modes, `/api/available-dates`, and
-  `/api/health` working with their current response shapes.
-- Historical snapshots will not contain the new measurements. The API and UI
-  must render those records using the current market-cap/volume fields rather
-  than failing or showing misleading peak labels.
-- Deploy in dependency order: optional Convex schema/read support first,
-  Functions parsing/API support second, and frontend consumption last. The old
-  frontend must work against the new backend, and the new frontend must work
-  when every new field is absent.
-- Do not switch production to a new Dune query immediately. Run it in shadow,
-  compare its token set and existing fields with query `4124453`, and keep the
-  old query available as the rollback path.
-- Preserve the current empty-result, partial-result, malformed-row, historical-
-  overwrite, and token-retention guards in `storeSnapshot` and token sync.
-- Do not combine the data-source switch, database changes, and full frontend
-  redesign in one deployment. Each stage must be independently deployable and
-  reversible.
+- Do not rename, remove, or change the meaning of existing token fields. New
+  Convex fields are optional; new API properties are additive and nullable.
+- Old snapshots lack the new fields; the API and UI must render them with the
+  current market-cap/volume presentation rather than failing.
+- Keep the empty-result, partial-result, malformed-row, historical-overwrite,
+  and token-retention guards in `storeSnapshot` and token sync.
+- Each stage deploys independently and is reversible; the Dune path stays
+  intact as the rollback reference until the retirement step above.
 
-### Required regression coverage before production changes
+## Parked — decided, not planned, or rejected
 
-- [x] Add fixtures for the current Dune row format and the proposed extended
-      format; both must parse successfully during the transition.
-- [x] Add an API contract test proving the existing token/freshness response is
-      unchanged when new fields are absent and only extended when present.
-- [x] Add a storage compatibility check using old token documents and new
-      optional fields, including replacement/retention guard behavior.
-- [x] Add frontend fixture coverage for current live data, an old historical
-      snapshot, partially enriched data, and the new extended data.
-- [x] Record a production baseline response shape and representative screenshots
-      without storing credentials or high-volume provider responses.
-
-## Next implementation session
-
-### 1. Lock the current behavior before changing it
-
-- [x] Add the regression fixtures and contract checks above.
-- [x] Record the current API fields and frontend states as the comparison
-      baseline.
-- [x] Confirm the current test/build commands pass before and after every stage.
-
-### 2. Prove the small data improvement in shadow
-
-- [ ] Recreate the Dune query under an account/team we control and version its
-      SQL in the repository.
-- [ ] Return the real migration time, clearly defined buy/sell counts, USD
-      volume, and a robust peak market-cap estimate for the recent window.
-- [ ] Compare the peak result against a small set of known runners, dead tokens,
-      and obvious outliers on external charts.
-- [ ] Confirm the query is executing frequently enough for a fast market; do not
-      mistake repeatedly downloading an old result for fresh data.
-
-Success means the query finds the tokens we care about, captures brief runners,
-and does not let one tiny trade manufacture the top result.
-
-### 3. Add optional backend support without switching the UI
-
-- [x] Add only the fields needed by the table: graduation time, observed peak,
-      peak time, current market cap, measured volume, buy/sell counts, and source
-      timestamps.
-- [ ] Keep a token's highest valid observed peak instead of overwriting it when
-      the token falls.
-- [ ] Store current DexScreener data separately from Dune's measured-window
-      values so the interface does not imply they are from the same moment.
-- [ ] Validate the selected Dex pair and retain its address for outbound links.
-- [ ] Deploy optional Convex fields first, then Functions support. Verify the
-      unchanged production frontend before proceeding.
-
-Do not build complete tick history, long-term chart infrastructure, or paid
-provider integration in this pass.
-
-### 4. Simplify the frontend with fallbacks
-
-- [ ] Replace redundant summary cards with the sortable token table and the
-      Trending, Best runners, and Newest presets.
-- [ ] Make peak versus current state immediately legible.
-- [ ] Keep dead runners in the results.
-- [ ] Improve the detail drawer as the place to investigate why a token worked.
-- [ ] Keep existing content visible while changing date windows.
-- [ ] Simplify freshness messaging and add a reasonable live-cache refresh.
-- [ ] Verify the result visually on desktop and mobile using real data.
-- [ ] If new peak/bidding fields are missing, retain the current volume and
-      market-cap presentation instead of erroring or producing empty rankings.
-
-### 5. Switch data sources only after comparison
-
-- [ ] Compare shadow and current query results across several executions.
-- [ ] Switch the query identifier independently of the schema/UI deployments.
-- [ ] Verify `/api/health`, live and historical API responses, a representative
-      token drawer, and Netlify's two-hour schedule immediately after deploy.
-- [ ] Keep the prior query/configuration available for immediate rollback.
-
-### 6. Add more only when the simple version proves a need
-
-Possible later additions:
-
-- a longer peak-monitoring window;
-- GeckoTerminal or Birdeye OHLCV when Dune cannot recover a useful peak;
-- token search and a local watchlist;
-- a compact performance chart; or
-- manual notes/tags for patterns worth remembering.
+- **Fake-ATH filtering: parked by the owner (2026-07-29).** Peaks are recorded
+  unfiltered. Four approaches were built and failed; the fake-ATH record in
+  [docs/HISTORY.md](docs/HISTORY.md) is the mandatory read before attempting a
+  fifth. Most promising
+  untried signal: a conservative floor on holder count (the only measured
+  signal that does not move with a pump's phase).
+- Sort presets over the table (Trending / Best runners / Newest) — old idea,
+  neither shipped nor rejected. Propose before building.
+- `reply_count` (pump.fun social signal) — free, unused, undiscussed.
+- `ROW_GRID` single column-definition array — worthwhile only when the table
+  next changes columns. The column layout is hand-synced across the template
+  in `TokenRow.tsx`, the header cells in `TokenList.tsx`, and the row cells;
+  a mismatch misaligns values under headers silently.
+- Rejected outright (do not re-propose): keyword/theme leaderboard, $100K
+  threshold rail/slider, creator/launch-farm clustering, search bar,
+  icon-only or boxed/chip row links.
 
 ## Reliability work that should not derail the product change
 
@@ -262,35 +152,25 @@ Possible later additions:
       30-second limit, while this enrichment job needs the 15-minute background
       runtime; use a scheduled dispatcher plus an authenticated background
       worker rather than trusting a spoofable request body.
-- [x] Prevent an older or concurrent Dune result from replacing newer data.
-- [x] Validate external URLs and use `noopener,noreferrer` when opening them.
-- [x] Fix the undefined `neon-*` loading/error color classes.
-- [x] Keep focused regression tests around snapshot and sync bookkeeping.
+
+Completed reliability items are recorded in [docs/HISTORY.md](docs/HISTORY.md).
 
 ## Active risks
 
-- **Dune ownership and freshness.** The live query is externally controlled and
-  may change, stop, or return an old execution independently of this app.
-- **Dune credentials.** The existing key reportedly belongs to a banned account
-  and appeared in git history. Do not print, rotate, or revoke it until a tested
-  replacement exists.
-- **Peak manipulation.** Never use a raw single-trade maximum as the winner
-  metric.
-- **Mixed timestamps.** Dune and DexScreener values can describe different
-  moments; retain their source times.
-- **Historical backfills.** A historical Dune cohort enriched later receives
-  current DexScreener values, not a historically accurate Dex reconstruction.
-- **Alert delivery.** GitHub Actions is configured six times per hour and has
-  successfully opened/closed health issues, but GitHub may delay or drop
-  scheduled runs. It is not a guaranteed ten-minute or direct-message channel.
+- **pump.fun is an undocumented dependency.** No ToS, no SLA, no rate-limit
+  headers; ~95% of its documented endpoints vanished in ~6 weeks. Keep the
+  DexScreener fallback so failure degrades instead of breaking; Convex remains
+  the durable asset once a token is captured.
+- **Wash-printed peaks are in the data** until a filter exists (see Parked).
+  The top of the peak-sorted list will contain fabricated numbers.
+- **Mixed timestamps.** pump.fun and DexScreener values can describe different
+  moments; retain their source times (the drawer's source-timing block).
+- **Alert delivery.** GitHub Actions health monitoring works but GitHub may
+  delay or drop scheduled runs; it is not a guaranteed ten-minute channel.
+- Until step 6 lands: the Dune key remains fragile (banned account — do not
+  rotate or revoke) and the query remains externally owned.
 
 ## Operational reminders
 
-- Only scheduled sync and admin backfill write durable snapshots; live/manual
-  fetches must not advance `duneMetadata` without a matching durable write.
-- Start every backfill with `dryRun=true`.
-- After a Netlify deploy touching functions, verify `scheduled-sync` is still
-  registered with `0 */2 * * *`.
-- Production reads Convex `dusty-ox-307`; follow the documented
-  `convex dev --once` path when intentionally updating that deployment.
-- Use `syncRuns` and `/api/health` as the operational health source.
+Operational guardrails live in [AGENTS.md](AGENTS.md)'s Guardrails section and
+are authoritative there; this file does not restate them.
