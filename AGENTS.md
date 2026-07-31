@@ -59,6 +59,14 @@ Where this file and another disagree, this file wins; fix the other.
   the fake-ATH record in [docs/HISTORY.md](docs/HISTORY.md)'s 2026-07-28/29
   entry before attempting another filter; it documents four failed approaches
   and why.
+- **Two measured gaps in the captured cohort (2026-07-31).** Discovery windows
+  on *creation* time, not graduation time, so a coin that graduates days after
+  launch is never seen — and the feed carries no graduation timestamp to fix it.
+  Separately, `ath_market_cap` appears to under-report at the low end: at least
+  484 of 850 sampled coins had a live PumpSwap pool yet an ATH below the
+  graduation threshold, still unexplained. Both qualify priority 1 below. Don't
+  describe the cohort as "everything that graduated today", and treat small ATH
+  values as unproven. See [docs/OPEN-ITEMS.md](docs/OPEN-ITEMS.md).
 - Volume, liquidity, buy/sell activity, retention, time-to-peak, and longevity
   are supporting evidence. They help the user judge the strength of an idea or
   niche, but they do not disqualify a brief `$100k+` runner.
@@ -161,14 +169,17 @@ npx tsc --noEmit -p convex/tsconfig.json   # typecheck Convex
 ## Guardrails (read before touching backend / ops)
 
 - **Dune key is fragile and exposed.** Account reportedly banned; key still
-  works. Never print/commit/log it; don't rotate or revoke until a tested
-  replacement exists.
+  works. Never print/commit/log it. Since 2026-07-31 it gates only
+  `POST /api/backfill` — the dashboard no longer depends on it, so revoking it
+  costs historical repair beyond pump.fun's ~24h reach and nothing else.
 - **Production Convex is `dusty-ox-307`.** A second deployment
   (`qualified-hound-245`) exists; switching `CONVEX_URL` is a deliberate data
   migration, not a casual change. `dusty-ox-307` is Convex's *dev* deployment, so
   `npx convex deploy` pushes to the wrong one (`qualified-hound-245`); update the
   live store with `npx convex dev --once` (verify via `npx convex dashboard
-  --no-open`).
+  --no-open`). **Push Convex before Netlify, always** — functions call Convex
+  queries by name, so a Netlify-first deploy 500s every request using a new one
+  until the store catches up (measured 2026-07-31 on `dailySnapshots.latest`).
 - **Only scheduled-sync and admin backfill write durable snapshots.**
   `/api/graduated` is a pure reader and must not regain a live-fetch path: a
   full cohort needs minutes of paced enrichment, which a request handler does
@@ -196,6 +207,13 @@ npx tsc --noEmit -p convex/tsconfig.json   # typecheck Convex
   `/coins/graduated` on the second host `advanced-api-v2` (only ~1.9h deep —
   see HISTORY's 2026-07-28/29 entry). Probe before believing any endpoint, and
   always keep the DexScreener fallback so failure degrades instead of breaking.
+  Verified 2026-07-31 against `/coins?complete=true`: the response is a **bare
+  array**, not `{coins:[...]}`; `complete=true` really is applied; and a 24h
+  window is ~17 pages / ~850 coins.
+- **Scheduled functions are not externally invocable.** `POST
+  /api/scheduled-sync` returns 403 in production — Netlify blocks outside calls
+  while still granting the 15-minute background runtime. To run one on demand,
+  execute the handler locally (see Verify below).
 - **`POST /api/backfill` is admin-only** (`ADMIN_REFRESH_TOKEN`); start
   backfills with `dryRun=true`. It is the last Dune consumer left.
 
@@ -203,5 +221,14 @@ npx tsc --noEmit -p convex/tsconfig.json   # typecheck Convex
 
 - UI changes: run `netlify dev` and look — drawer, freshness states, clean
   console. Compiling is not "looking right".
-- Backend changes: the typecheck + test commands above.
+- Backend changes: the typecheck + test commands above, **then actually run the
+  thing**. On 2026-07-31 every gate passed — build, both typechecks, 53 tests —
+  while `scheduled-sync`'s write path had never executed anywhere and
+  `graduated.ts` was calling a Convex function that did not exist on the
+  deployed store. Neither failure is visible to a typecheck.
+- To run a Netlify handler without deploying, compile it to CommonJS *inside the
+  project* (so `node_modules` resolves), copy in `convex/_generated`, and call
+  its exported handler with `CONVEX_URL` set — recipe in [PLAN.md](PLAN.md)'s
+  verification loop. This writes to whichever Convex deployment `CONVEX_URL`
+  names, so it is a real production write when pointed at `dusty-ox-307`.
 - `npm run build` emits a known Vite chunk-size warning — that is not a failure.
