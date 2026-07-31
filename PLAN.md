@@ -1,9 +1,9 @@
 # meta.tracker — Plan
 
-What is left of the switch from Dune to pump.fun. The pipeline is wired and
-locally verified; deploying it and retiring what it obsoletes are the remaining
-steps. Evidence, measurements, and API verification behind every claim here live
-in [docs/HISTORY.md](docs/HISTORY.md)'s 2026-07-28/29 and 2026-07-30 entries —
+What is left of the switch from Dune to pump.fun. The pipeline is deployed and
+running; retiring what it obsoletes is the remaining step. Evidence,
+measurements, and API verification behind every claim here live in
+[docs/HISTORY.md](docs/HISTORY.md)'s 2026-07-28 through 2026-07-31 entries —
 read them before touching the sync path. Mission and guardrails live in
 [AGENTS.md](AGENTS.md).
 
@@ -18,8 +18,9 @@ section.
 
 ## Current state
 
-**Deployed and verified in production on 2026-07-31.** Convex `dusty-ox-307`
-and Netlify are both on commit `8bc125a`, with both crons registered.
+**Deployed and verified in production on 2026-07-31**, Convex `dusty-ox-307`
+first and Netlify second, with both crons registered. Netlify egress to
+pump.fun was confirmed by probe the same day.
 
 `scheduled-sync` discovers through pump.fun `/coins?complete=true`, enriches
 through DexScreener at 5 requests in flight per second, stores the snapshot with
@@ -51,30 +52,19 @@ Open questions and deferred cleanups live in
 [docs/OPEN-ITEMS.md](docs/OPEN-ITEMS.md) — read it before assuming the pump.fun
 data is fully understood.
 
-### 1. Confirm pump.fun answers a Netlify IP — do this first
+### 1. Retire what the migration obsoletes
 
-**This is the one thing the deploy did not prove.** The pre-flight probe was
-skipped by the owner's decision, and the first production snapshot was written
-by running the real handler locally, from a residential IP. pump.fun is
-Cloudflare-fronted and may treat datacenter egress differently, so **no
-successful fetch has ever been made from Netlify.**
+~~Confirm pump.fun answers a Netlify IP.~~ **Closed 2026-07-31 by probe**: a
+throwaway function on a draft deploy reached `/coins?complete=true` in 173ms,
+`200`, 50 coins, `cf-ray ...-IAD`, `cf-mitigated` absent. Cloudflare does not
+treat Netlify's egress differently. The technique is worth remembering — a draft
+deploy (`npx netlify deploy --build`, no `--prod`) runs functions on real
+Netlify infrastructure without touching production, which is how any
+"does-the-datacenter-get-blocked" question should be answered rather than
+waiting on a cron.
 
-Check the first *scheduled* run (any even UTC hour):
-
-```bash
-curl -s https://metratrackerapp.netlify.app/api/health | python3 -m json.tool
-```
-
-A `syncRuns` row with `status: success` and a token count in the hundreds means
-the transport is fine and this item closes. An empty feed is the signature of
-blocked egress — the sync refuses to store an empty cohort, so the failure is
-loud, the previous snapshot survives, and health goes red within ~4.5h with the
-GitHub monitor opening an issue. The fix would then be a different transport
-(proxy or a server-side fetch with browser-ish headers), not a data change.
-
-### 2. Retire what the migration obsoletes (only after step 1 is confirmed)
-
-Deleting these early would remove the rollback reference, so they wait.
+The rollback reference is no longer needed for transport reasons; keep it only
+until a few unattended scheduled runs have gone green.
 
 - `peak-backfill.ts` + `_shared/solana-tracker.ts` + `SOLANA_TRACKER_API_KEY`
   + `tests/solana-tracker.test.mjs`. Keep the `observedPeaks` table — ATH
@@ -90,7 +80,9 @@ Deleting these early would remove the rollback reference, so they wait.
   `syncRuns.duneExecutionEndedAt` carries feed freshness now and wants the
   rename in the same pass.
 
-## Verification loop (no deploy, no Convex writes)
+## Verification loops
+
+### Driving the UI off a real cohort (no deploy, no Convex writes)
 
 Compile the sync engine standalone:
 

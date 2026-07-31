@@ -54,15 +54,25 @@ degrades rather than throwing, preserving the tested invariant.
 Two other suspected defects were **tested and disproven** rather than "fixed"
 speculatively: `observedPeaks.byMints` at 20x scale, and the API payload size.
 
-### Still unproven
+### Netlify egress settled the same day
 
-**pump.fun has never been fetched successfully from a Netlify IP.** Every
-measurement, including the run that wrote this snapshot, came from a residential
-IP. The pre-flight probe was skipped by the owner's decision on 2026-07-30. The
-first *scheduled* run is the real test; an empty feed is the signature of blocked
-datacenter egress, and the sync will fail loudly rather than store it.
+The pre-flight probe skipped on 2026-07-30 was finally run, after the owner
+pushed back on waiting an hour for the next cron. A throwaway function deployed
+to a **draft URL** (`npx netlify deploy --build`, no `--prod`, production
+untouched) reached `/coins?complete=true` from Netlify's own infrastructure:
 
-Also unresolved, and the highest-value open question: 484 of 850 sampled coins
+```
+reachable true | status 200 in 173ms | 50 coins | isArray true
+server cloudflare | cf-ray a239835529075668-IAD | cf-mitigated absent
+```
+
+Cloudflare does not treat Netlify's datacenter egress differently from a
+residential IP, so the transport concern that shadowed this whole migration is
+closed. Worth keeping as a technique: a draft deploy answers any
+"would-this-be-blocked-in-production" question in about two minutes, without
+touching the live site and without waiting on a schedule.
+
+The remaining open question, and the highest-value one: 484 of 850 sampled coins
 have a live `pump_swap_pool` yet report an ATH below the graduation threshold.
 See [OPEN-ITEMS.md](OPEN-ITEMS.md).
 

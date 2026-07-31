@@ -112,10 +112,10 @@ and 298. The Dune code path stays in the tree until the retirement step in
 of graduations: 52 rows against 995 in the same 24h window, because it matches
 one hardcoded bonding-curve instruction that PumpSwap migrations bypass.
 
-**Not yet proven: pump.fun answering a Netlify IP.** Every successful fetch so
-far, including the one that wrote the first production snapshot, came from a
-residential IP. pump.fun is Cloudflare-fronted, so the first *scheduled* run is
-the real test — see PLAN.md step 1 before assuming the transport is settled.
+**Netlify egress to pump.fun is confirmed** (2026-07-31): a probe function on a
+draft deploy got `200` in 173ms, 50 coins, `cf-ray ...-IAD`, no Cloudflare
+mitigation. The Cloudflare front does not treat Netlify's datacenter IPs
+differently from a residential one.
 
 ## Stack
 
@@ -231,4 +231,9 @@ npx tsc --noEmit -p convex/tsconfig.json   # typecheck Convex
   its exported handler with `CONVEX_URL` set — recipe in [PLAN.md](PLAN.md)'s
   verification loop. This writes to whichever Convex deployment `CONVEX_URL`
   names, so it is a real production write when pointed at `dusty-ox-307`.
+- Infrastructure questions ("would this be blocked from a datacenter IP?")
+  belong on a **draft deploy** — `npx netlify deploy --build` without `--prod`
+  runs functions on real Netlify infrastructure at a throwaway URL, leaving
+  production untouched. That is how pump.fun egress was settled in two minutes
+  rather than by waiting on a cron.
 - `npm run build` emits a known Vite chunk-size warning — that is not a failure.
