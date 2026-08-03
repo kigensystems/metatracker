@@ -61,9 +61,20 @@ npx tsc --noEmit -p convex/tsconfig.json   # typecheck Convex
   wrong conclusion. `enrichTokens` paces at 5 in flight per second. Do not raise it.
 - **`/api/graduated` is a pure reader** and must not regain a live-fetch path; a
   full cohort needs minutes of paced enrichment.
-- **After any deploy touching functions, verify both crons registered**:
-  `scheduled-sync` at `0 */2 * * *`, `peak-backfill` at `20 * * * *`. A passing
-  typecheck does not prove a cron registered.
+- **After any deploy touching functions, verify both crons registered *and*
+  still run in background mode**: `scheduled-sync` at `0 */2 * * *`,
+  `peak-backfill` at `20 * * * *`. The property that buys the 15-minute runtime
+  is `background: true`; an invented `type: "background"` typechecks, deploys,
+  and is silently ignored, leaving a 30-second cap that kills every sync
+  mid-enrichment without logging an error. Check the deployed invocation mode:
+
+  ```
+  npx netlify api getDeploy --data '{"deploy_id":"<id>"}' \
+    | jq -r '.available_functions[]|select(.n=="scheduled-sync")|.im'
+  ```
+
+  It must print `background`. `stream` means synchronous, and the sync is dead.
+  A passing typecheck proves nothing here — this shipped broken for days.
 - **pump.fun's API is undocumented and moves.** v1 and v2 are already retired.
   Probe before believing any endpoint, and keep the DexScreener fallback so
   failure degrades instead of breaking.

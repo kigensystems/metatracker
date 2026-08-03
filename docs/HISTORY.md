@@ -8,6 +8,52 @@ design and the entries are kept as a record.
 
 ---
 
+## 2026-08-03 — the cron had never worked; one wrong config property
+
+Found while verifying an unrelated deploy. `/api/health` reported `ok=false`
+with **no recorded success at all**, and all 50 most recent `syncRuns` rows sat
+at `"running"` — no end time, no error, three rows per slot.
+
+Both scheduled functions exported `type: "background"`. That property does not
+exist in Netlify's `Config`; the real one is `background: true`. The annotation
+`Config & { type: "background" }` is what let an invented property typecheck.
+Netlify ignored it and ran the functions as **synchronous, capped at 30 seconds**
+instead of 900. Function logs told the story exactly:
+
+```
+06:01:39 Scheduled sync started        06:01:55 Scheduled sync started  (retry)
+06:01:39 Fetching the graduated feed    06:01:57 Got 822 tokens from 17 pages
+         ...no Duration line, ever              Enriching tokens with DexScreener...
+```
+
+The feed walk alone is ~17s of paced paging, so enrichment had ~13s of a
+200-second job before the kill. Netlify retried three times per slot. Nothing
+was ever logged as an error because the process was killed outright, never
+reaching `markSuccess` or `markFailure`.
+
+Confirmed by the deployed invocation mode, which is the check worth keeping:
+
+```
+deploy 7951858  scheduled-sync .im = background   <- after the fix
+deploy bd4f9bd  scheduled-sync .im = stream
+deploy e1eb414  scheduled-sync .im = stream
+```
+
+**The correction this forces:** the 2026-07-31 entry below records a successful
+`trigger: "scheduled"` run at the `02:00` slot. That was the handler executed
+locally against production Convex, which writes an identical row. **No cron run
+has ever completed in production.** The dashboard had been serving the
+2026-07-31 snapshot ever since, silently — the data looked plausible, just
+frozen. `peak-backfill` carried the same bug and survived it only because it
+finishes in ~1s whenever it finds nothing pending.
+
+Two lessons, both now guardrails in [AGENTS.md](../AGENTS.md): a passing
+typecheck says nothing about whether a platform honoured your config, and a
+scheduled job that writes its own audit row can report a trigger it did not
+actually come from.
+
+---
+
 ## 2026-07-31 (close-out) — the project is finished; docs cut back
 
 The owner called a stop: the tool works and had turned into weeks of sessions
