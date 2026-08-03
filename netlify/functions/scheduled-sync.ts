@@ -272,9 +272,14 @@ export default async function handler(_request: Request, _context: Context) {
   }
 }
 
-// Run every 2 hours (at 00:00, 02:00, … 22:00 UTC). Background function allows
-// up to 15 minutes, which the paced DexScreener enrichment needs at cohort size.
-export const config: Config & { type: "background" } = {
+// Run every 2 hours (at 00:00, 02:00, … 22:00 UTC).
+//
+// `background: true` is load-bearing and easy to get wrong. The property that
+// buys the 15-minute runtime is `background`; a plausible-looking `type:
+// "background"` is silently ignored, leaving the 30-second synchronous limit —
+// which the feed walk alone nearly exhausts, so every run died mid-enrichment
+// and Netlify retried it three times per slot. Do not rename this field.
+export const config: Config = {
   schedule: "0 */2 * * *",
-  type: "background",
+  background: true,
 };

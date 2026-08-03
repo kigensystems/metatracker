@@ -187,7 +187,8 @@ export default async function handler(_request: Request, _context: Context) {
 }
 
 // Hourly, offset from the two-hour cohort sync so the two never contend.
-export const config: Config & { type: "background" } = {
+// `background: true`, not `type: "background"` — see the note in scheduled-sync.
+export const config: Config = {
   schedule: "20 * * * *",
-  type: "background",
+  background: true,
 };
