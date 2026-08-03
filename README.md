@@ -5,10 +5,10 @@ with DexScreener market data. React/Vite frontend, Netlify Functions for
 API/runtime work, and Convex for durable snapshots, sync audit, and historical
 browsing.
 
-Canonical agent instructions: [AGENTS.md](AGENTS.md). Claude compatibility:
-[CLAUDE.md](CLAUDE.md). Forward plan: [PLAN.md](PLAN.md). Known unknowns and
-deferred cleanups: [docs/OPEN-ITEMS.md](docs/OPEN-ITEMS.md). Incident history +
-changelog: [docs/HISTORY.md](docs/HISTORY.md).
+Agent instructions: [AGENTS.md](AGENTS.md) (`CLAUDE.md` is a symlink to it).
+Incident history + changelog: [docs/HISTORY.md](docs/HISTORY.md).
+
+**The tool is finished and running.** Read AGENTS.md before proposing work.
 
 ## Production
 
@@ -37,8 +37,7 @@ Core production flow:
 > **Deployed and verified in production 2026-07-31.** The first run captured
 > 809 graduates with 100% DexScreener enrichment; the dashboard went from 23
 > tokens to 818, and Netlify egress to pump.fun was confirmed by probe the same
-> day. Evidence is in [docs/HISTORY.md](docs/HISTORY.md); what remains is in
-> [PLAN.md](PLAN.md).
+> day. Evidence is in [docs/HISTORY.md](docs/HISTORY.md).
 
 1. Netlify scheduled function runs every 2 hours (00:00, 02:00, … 22:00 UTC).
 2. Pages the pump.fun graduated feed back 24 hours.
@@ -86,53 +85,42 @@ missed ~95% of graduations. No longer read by `scheduled-sync`. Backfill query
 banner (`info.header`, ~72% coverage), market cap, volume, liquidity, 24h price
 change, website, X/Twitter, and pair creation timestamp.
 
-### Solana Tracker (superseded)
+### Peak backfill
 
-pump.fun reports an all-time high with the token itself, so `peak-backfill.ts`
-is redundant for anything captured by the new sync. It still runs, and still
-owns the peaks for every row captured before the migration. The chart endpoint
-supplies observed peak market cap. `netlify/functions/peak-backfill.ts`
-runs hourly and reads each mint exactly once, while it is between **24 hours and
-5 days old**. The lower bound waits for Dune's 24-hour window to close so the
-run is over and the reading is a completed observation rather than a running
-maximum. The upper bound is a product decision: this meta moves fast and
-attention moves on, so an older token is not worth a request.
+`https://frontend-api-v3.pump.fun/coins/{mint}` — the same `ath_market_cap` the
+graduated feed carries, read one mint at a time.
+`netlify/functions/peak-backfill.ts` runs hourly and reads each mint exactly
+once, while it is between **24 hours and 5 days old**. The lower bound waits for
+the discovery window to close so the run is over and the reading is a completed
+observation rather than a running maximum. The upper bound is a product
+decision: this meta moves fast, so an older token is not worth a request. Since
+pump.fun answers for far older mints at no cost, that bound is now purely a
+relevance choice and could be widened.
 
-That bound also keeps usage permanently inside the free plan. The stored history
-reaches back to 2026-03 (~7.2k mints); reading all of it would cost roughly 3x
-the monthly free allowance to answer questions about tokens nobody is
-researching. The 5-day window is ~60 mints, and steady state equals the arrival
-rate (~15-45/day).
+The two-hour sync already records an ATH for nearly every mint it sees, but only
+ever as `ok` — it writes no row at all for a mint the feed gave no ATH for. This
+job settles those as `empty` so they stop counting as unread, and re-reads a
+token after it ages out of the 24h discovery window, which catches a final peak
+move. A `404` is treated as `empty`, since a coin the venue no longer knows is a
+permanent answer rather than an outage. Five failed reads in a row stop the run
+without writing further rows, so a provider outage cannot burn the retry budget
+of the whole batch. Readings flush to Convex in batches of 10, so a timeout
+never discards work already done.
 
-The request uses `type=1h` with `marketCap=true` and `removeOutliers=false`.
-Two provider behaviours, verified against the live API on 2026-07-27, drive
-that choice:
-
-- A response is capped at 2000 candles and returns the **most recent** ones.
-  `time_from` cannot extend coverage backwards, so at `1m` any token with more
-  than 2000 traded minutes silently loses the early history where peaks occur.
-  At `1h` a token's whole life fits inside the cap (~83 days), and an hourly
-  candle's `high` is the max of its minute highs, so brief wicks survive.
-- The raw HTTP parameters are `time_from`/`time_to`. Sending `timeFrom`/`timeTo`
-  is silently ignored and returns the provider's default window.
-
-No budget accounting is needed. The free plan's 3 req/s is enforced by 1-second
-spacing. A provider-wide refusal (401/402/403/429) raises a distinct halt error
-that ends the run **without writing rows**, so pending mints keep their retry
-budget instead of an exhausted quota marking thousands of them permanently
-failed. Readings are flushed to Convex in batches of 10, so a timeout or crash
-never discards work already paid for.
+This replaced Solana Tracker's OHLCV chart endpoint on 2026-08-01, removing an
+API key and a 2,500/month quota ceiling. It also fixed a silent accuracy bug:
+that provider capped responses at 2,000 candles and returned the *newest* ones,
+so any token older than ~83 days lost the early history where peaks occur. On
+the one such token in the cohort it under-read the peak by 65%.
 
 Peaks live only in `observedPeaks`, keyed by mint, and are joined onto tokens at
 read time in `/api/graduated`. Stored snapshots are never rewritten to carry a
 peak, and a token shows the same peak on every date it appeared.
 
-This metric is labeled **observed peak market cap**, not ATH, *for readings
-derived from candle history*: those are bounded by the window actually examined,
-which each row records. Rows sourced from pump.fun carry
-`observedPeakCandleInterval: "reported"` and a genuine all-time high, so the
-drawer labels those `ATH market cap`. The table column stays `Observed peak`
-because it mixes both kinds of row.
+Rows carry `observedPeakCandleInterval: "reported"` and a genuine all-time high,
+so the drawer labels them `ATH market cap`. The table column stays `Observed
+peak` because a handful of pre-migration rows are still candle-derived, bounded
+by the window each one records, and those keep the more cautious label.
 
 ## Cache and Snapshot Rules
 
@@ -275,7 +263,6 @@ CONVEX_URL
 CONVEX_DEPLOYMENT
 ADMIN_REFRESH_TOKEN
 DUNE_BACKFILL_QUERY_ID=7746626
-SOLANA_TRACKER_API_KEY
 ```
 
 Never print or commit real values; `.env.example` holds placeholders only.
@@ -343,7 +330,7 @@ reaches a data provider, so they are all safe to run against production.
 ## Convex Tables
 
 - `duneMetadata` — Dune cache metadata. Written by nothing since the migration;
-  kept until the schema prune (see [PLAN.md](PLAN.md)).
+  harmless, left in place.
 - `dailySnapshots` — one row per UTC snapshot date.
 - `syncRuns` — durable scheduled-sync/backfill audit log; the operational health source.
 - `graduatedTokens` — token rows linked to snapshot dates. These never carry a peak.

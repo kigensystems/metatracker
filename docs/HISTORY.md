@@ -1,8 +1,86 @@
 # meta.tracker — History
 
-Archived incident logs, rollout records, and changelog. Newest first. For the
-current forward plan see [PLAN.md](../PLAN.md); for stable architecture and
-operations docs see [README.md](../README.md).
+Archived incident logs, rollout records, and changelog. Newest first. For agent
+instructions see [AGENTS.md](../AGENTS.md); for stable architecture and
+operations docs see [README.md](../README.md). Older entries link to `PLAN.md`
+and `docs/OPEN-ITEMS.md`, deleted on 2026-07-31 — those links are dead by
+design and the entries are kept as a record.
+
+---
+
+## 2026-07-31 (close-out) — the project is finished; docs cut back
+
+The owner called a stop: the tool works and had turned into weeks of sessions
+for a dashboard. Diagnosis of why, recorded so it is not repeated:
+
+- **The `/handoff` skill was the engine.** It mandates ending every session with
+  "what's open with the exact next step to resume it." It cannot emit "this is
+  done, stop", so each session manufactured a to-do list that the next session
+  executed without ever asking whether the work was worth doing. Don't use it here.
+- **The docs were a ratchet.** 2,209 lines of prose against 6,184 of code.
+  `OPEN-ITEMS.md` was by definition a list of unfinished things, so a fresh
+  session always found something to do.
+
+`PLAN.md` and `docs/OPEN-ITEMS.md` are deleted. `AGENTS.md` went from 250 lines
+to ~100 and now opens with "this tool is finished, propose before building".
+`CLAUDE.md` is a symlink to `AGENTS.md` — only `CLAUDE.md` is auto-injected into
+Claude Code's context and only `AGENTS.md` is read by Codex, so the old
+"compatibility copy" arrangement meant maintaining 250 duplicated lines by hand.
+No code changed. Nothing in the running system was touched.
+
+---
+
+## 2026-07-31 (later) — the sub-threshold ATH anomaly was ours, not pump.fun's
+
+The first unattended cron fired clean (`02:00Z`, 809 tokens, 100% enrichment,
+`retryCount 0`), so the ATH question was taken up. **`ath_market_cap` is
+correct.** The 484 "self-contradictory graduates" dissolve into two errors on
+our side, both found by re-reading the feed rather than by consulting a second
+price source.
+
+### The `$69k` threshold is a stale constant
+
+Graduation is denominated in SOL, at **400 SOL of market cap**. Every coin
+carries `market_cap_quote` next to `usd_market_cap`, so SOL price is readable
+per row — `$74.04` across all 578 rows, matching Orca's SOL/USDC pair
+(`$74.033`). Restating each reported ATH in SOL:
+
+```
+578 SOL-quoted non-Mayhem graduates
+ATH in SOL:  min 400.47   p1 415.8   p5 434.3   p50 1528.6
+below 400 SOL: 0
+```
+
+A floor at 400 with nothing under it is a threshold. `$69k` is 400 SOL at
+`~$172/SOL`; today the same threshold is `$29,616`. The coins "below the
+graduation threshold" were above it — we were holding an old dollar figure
+against a SOL-denominated rule.
+
+### 31% of the feed is Mayhem Mode
+
+266 of 850 coins carry `mayhem_state`. [Mayhem
+Mode](https://pump.fun/docs/mayhem-mode) mints an extra 1B tokens for an
+autonomous AI agent to trade the coin for its first 24h. These reach
+`complete: true` **without** clearing 400 SOL — median ATH 66 SOL (~`$4.9k`),
+min 21 SOL — and migrate with `$3`–`$463` of PumpSwap liquidity against up to
+`$264k` of 24h volume. They were the whole `$1k`–`$10k` bucket, and 16 of the 17
+USDC-quoted rows.
+
+Corrected: **578 real graduates, minimum ATH `$29,661`, 298 clearing `$100k`.**
+
+### What it changed, and what it did not
+
+`mayhem_state` is the first fake-peak signal found that does not move with a
+pump's phase — it is set at launch. But it is **not** the filter the 2026-07-28/29
+work was looking for: the five highest non-Mayhem ATHs sampled still show
+`$1.3k`–`$1.7k` liquidity against `$1.1M`–`$1.4M` of 24h volume. It removes
+low-end contamination, not the headline fakes.
+
+Two consequences, both closed the same day as **no action**: the owner's call is
+that real tokens don't launch via Mayhem, and the `$100k` bar already excludes
+259 of 266 Mayhem coins, so `mayhem_state` is not captured. The `$100k` USD bar
+has drifted from 1.45x graduation to 3.4x purely because SOL fell; left as is,
+since "harder" means fewer and better rows on the page.
 
 ---
 
@@ -74,7 +152,7 @@ touching the live site and without waiting on a schedule.
 
 The remaining open question, and the highest-value one: 484 of 850 sampled coins
 have a live `pump_swap_pool` yet report an ATH below the graduation threshold.
-See [OPEN-ITEMS.md](OPEN-ITEMS.md).
+**Answered later the same day — see the entry above.**
 
 ---
 

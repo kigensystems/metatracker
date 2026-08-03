@@ -89,12 +89,14 @@ export interface DuneLatestStatus {
  */
 export interface PeakObservation {
   mint: string;
-  status: "ok";
-  peakMarketCapUsd: number;
+  /** `empty` means the venue has no ATH for the mint; `failed`, that the read threw. */
+  status: "ok" | "empty" | "failed";
+  peakMarketCapUsd?: number;
   peakAt?: number;
   windowFrom: number;
   windowTo: number;
   candleInterval: string;
+  lastError?: string;
 }
 
 export interface EnrichmentResult {
@@ -620,6 +622,11 @@ const PUMP_REQUEST_SPACING_MS = 1_000;
 export const PUMP_SOURCE_ID = "pumpfun:coins?complete=true";
 /** Distinguishes an ATH reported by the venue from a candle-derived peak. */
 export const PUMP_PEAK_SOURCE = "pump.fun";
+/** `candleInterval` for a venue-reported ATH; the UI labels these differently. */
+export const REPORTED_PEAK_INTERVAL = "reported";
+/** v1 and v2 are already retired, so the next move should be a one-line change. */
+const PUMP_API_BASE = "https://frontend-api-v3.pump.fun";
+const PUMP_REQUEST_TIMEOUT_MS = 15_000;
 /** How far back each sync reads the graduated feed. */
 export const PUMP_DISCOVERY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -691,13 +698,13 @@ export async function fetchGraduatedFromPumpFun(
   let complete = false;
 
   for (let page = 0; page < PUMP_MAX_PAGES; page += 1) {
-    const url = `https://frontend-api-v3.pump.fun/coins`
+    const url = `${PUMP_API_BASE}/coins`
       + `?offset=${page * PUMP_PAGE_SIZE}&limit=${PUMP_PAGE_SIZE}`
       + `&sort=created_timestamp&order=DESC&complete=true&includeNsfw=true`;
 
     const response = await fetch(url, {
       headers: { accept: 'application/json' },
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(PUMP_REQUEST_TIMEOUT_MS),
     });
     if (!response.ok) break;
 
@@ -746,6 +753,43 @@ export async function fetchGraduatedFromPumpFun(
   }
 
   return { tokens, meta, createdAt, pagesFetched, complete };
+}
+
+/**
+ * The reported ATH for one mint, for tokens the 24h feed no longer carries.
+ *
+ * Same field the graduated feed supplies, read one coin at a time. Returns null
+ * when there is no ATH to be had — either pump.fun does not know the mint, or it
+ * knows it and reports none — which the caller records as `empty` so the mint
+ * stops being retried. Anything else throws, because a mint the venue should
+ * know failing to resolve is a provider problem rather than a fact about it.
+ */
+export async function fetchReportedPeak(
+  mint: string,
+  createdAt: number,
+  now: number = Date.now(),
+): Promise<PeakObservation | null> {
+  const response = await fetch(`${PUMP_API_BASE}/coins/${mint}`, {
+    headers: { accept: 'application/json' },
+    signal: AbortSignal.timeout(PUMP_REQUEST_TIMEOUT_MS),
+  });
+  // A gone coin is a permanent answer, not an outage: recording it as `empty`
+  // both stops the retries and keeps it out of the caller's outage detector.
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`pump.fun coin request failed (${response.status})`);
+
+  const meta = pumpMetaFromCoin(await response.json() as Record<string, unknown>);
+  if (!meta.athMarketCap) return null;
+
+  return {
+    mint,
+    status: 'ok',
+    peakMarketCapUsd: meta.athMarketCap,
+    peakAt: meta.athAt,
+    windowFrom: createdAt,
+    windowTo: now,
+    candleInterval: REPORTED_PEAK_INTERVAL,
+  };
 }
 
 async function fetchDexScreener(mint: string): Promise<DexScreenerFetchResult | null> {
@@ -874,7 +918,7 @@ export async function enrichTokens(
         // so the window is not the bounded one the candle reader had to use.
         windowFrom: created ?? pump.athAt ?? Date.now(),
         windowTo: Date.now(),
-        candleInterval: "reported",
+        candleInterval: REPORTED_PEAK_INTERVAL,
       });
     });
 
